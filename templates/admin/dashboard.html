@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Caloria Admin{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="h5 mb-0 font-weight-bold">{{ total_users }}</div>
+                        <div class="small">Total Users</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-success">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="h5 mb-0 font-weight-bold">{{ active_users }}</div>
+                        <div class="small">Active Users</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-check fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-info">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="h5 mb-0 font-weight-bold">{{ completed_quizzes }}</div>
+                        <div class="small">Completed Quizzes</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-clipboard-check fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card-warning">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="h5 mb-0 font-weight-bold">{{ total_food_logs }}</div>
+                        <div class="small">Food Logs</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-utensils fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Row -->
+<div class="row">
+    <!-- Recent Users -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-users me-2"></i>
+                    Recent Users
+                </h6>
+                <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_users %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>WhatsApp ID</th>
+                                    <th>Quiz</th>
+                                    <th>Joined</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in recent_users %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('admin_user_detail', user_id=user.id) }}" 
+                                           class="text-decoration-none">
+                                            {{ user.first_name or 'Unknown' }} {{ user.last_name or '' }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ user.whatsapp_id[:15] }}...</small>
+                                    </td>
+                                    <td>
+                                        {% if user.quiz_completed %}
+                                            <span class="badge bg-success">Completed</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ user.created_at.strftime('%m/%d/%y') }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No users yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Food Logs -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-utensils me-2"></i>
+                    Recent Food Logs
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if recent_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Food</th>
+                                    <th>Calories</th>
+                                    <th>Method</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_logs %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('admin_user_detail', user_id=log.user_id) }}" 
+                                           class="text-decoration-none">
+                                            {{ log.user.first_name or 'User' }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 120px;">
+                                            {{ log.food_name }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ log.calories|round|int }}</strong> kcal
+                                    </td>
+                                    <td>
+                                        {% if log.analysis_method == 'photo' %}
+                                            <span class="badge bg-primary"><i class="fas fa-camera"></i></span>
+                                        {% elif log.analysis_method == 'voice' %}
+                                            <span class="badge bg-info"><i class="fas fa-microphone"></i></span>
+                                        {% else %}
+                                            <span class="badge bg-secondary"><i class="fas fa-keyboard"></i></span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ log.created_at.strftime('%H:%M') }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-utensils fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No food logs yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Activity Chart -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    User Activity (Last 7 Days)
+                </h6>
+            </div>
+            <div class="card-body">
+                <canvas id="activityChart" width="400" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-bolt me-2"></i>
+                    Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('admin_users') }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-users me-2"></i>
+                            Manage Users
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <button class="btn btn-outline-info w-100" onclick="showAPIInfo()">
+                            <i class="fas fa-code me-2"></i>
+                            API Documentation
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <button class="btn btn-outline-success w-100" onclick="refreshData()">
+                            <i class="fas fa-sync-alt me-2"></i>
+                            Refresh Data
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger w-100">
+                            <i class="fas fa-sign-out-alt me-2"></i>
+                            Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Activity Chart
+const ctx = document.getElementById('activityChart').getContext('2d');
+const activityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: ['7 days ago', '6 days ago', '5 days ago', '4 days ago', '3 days ago', '2 days ago', 'Yesterday'],
+        datasets: [{
+            label: 'New Users',
+            data: [2, 5, 3, 8, 4, 6, 7],
+            borderColor: 'rgba(102, 126, 234, 1)',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            tension: 0.4,
+            fill: true
+        }, {
+            label: 'Food Logs',
+            data: [15, 23, 18, 35, 28, 42, 38],
+            borderColor: 'rgba(56, 239, 125, 1)',
+            backgroundColor: 'rgba(56, 239, 125, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'top',
+            },
+            title: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.1)'
+                }
+            },
+            x: {
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.1)'
+                }
+            }
+        }
+    }
+});
+
+function refreshData() {
+    // Show loading state
+    const refreshBtn = event.target;
+    const originalText = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
+    refreshBtn.disabled = true;
+    
+    // Simulate refresh (in real app, this would make an AJAX call)
+    setTimeout(() => {
+        location.reload();
+    }, 1000);
+}
+
+// Auto-refresh every 30 seconds
+setInterval(() => {
+    // In a real application, you'd make an AJAX call to update the statistics
+    console.log('Auto-refreshing dashboard data...');
+}, 30000);
+</script>
+{% endblock %} 

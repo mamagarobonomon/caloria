@@ -1,0 +1,36 @@
+name: caloria-vip
+services:
+- name: web
+  source_dir: /
+  github:
+    repo: your-username/caloria
+    branch: main
+  run_command: gunicorn --worker-tmp-dir /dev/shm --config gunicorn.conf.py app:app
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  envs:
+  - key: FLASK_ENV
+    value: production
+  - key: SECRET_KEY
+    value: your-production-secret-key-here
+  - key: SPOONACULAR_API_KEY
+    value: 3e0eac47470049d6845406463f223518
+  - key: MANYCHAT_API_TOKEN
+    value: your-manychat-token
+  - key: DATABASE_URL
+    value: ${db.DATABASE_URL}
+  routes:
+  - path: /
+    
+databases:
+- name: db
+  engine: PG
+  version: "14"
+  size: basic-xs
+  
+domains:
+- domain: caloria.vip
+  type: PRIMARY
+- domain: www.caloria.vip
+  type: ALIAS 

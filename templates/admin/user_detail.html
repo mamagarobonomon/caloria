@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.first_name or 'User' }} {{ user.last_name or '' }} - Caloria Admin{% endblock %}
+{% block page_title %}User Details{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Users
+    </a>
+    <button type="button" class="btn btn-outline-primary" onclick="refreshData()">
+        <i class="fas fa-sync-alt me-2"></i>Refresh
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- User Profile Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-2 text-center">
+                        <div class="avatar-large mb-3">
+                            <div class="avatar-initial-large bg-primary rounded-circle">
+                                {{ (user.first_name or 'U')[0].upper() }}
+                            </div>
+                        </div>
+                        {% if user.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-10">
+                        <h3 class="mb-1">
+                            {% if user.first_name or user.last_name %}
+                                {{ user.first_name or '' }} {{ user.last_name or '' }}
+                            {% else %}
+                                Unknown User
+                            {% endif %}
+                        </h3>
+                        <p class="text-muted mb-2">
+                            <i class="fab fa-whatsapp me-2"></i>{{ user.whatsapp_id }}
+                        </p>
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-calendar me-2"></i>Joined on {{ user.created_at.strftime('%B %d, %Y') }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Information -->
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-user me-2"></i>Profile Information
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if user.quiz_completed %}
+                    <div class="row">
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">Weight</label>
+                            <p class="h5">{{ user.weight or 'N/A' }} kg</p>
+                        </div>
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">Height</label>
+                            <p class="h5">{{ user.height or 'N/A' }} cm</p>
+                        </div>
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">Age</label>
+                            <p class="h5">{{ user.age or 'N/A' }} years</p>
+                        </div>
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">Gender</label>
+                            <p class="h5">{{ user.gender|title if user.gender else 'N/A' }}</p>
+                        </div>
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">Activity Level</label>
+                            <p class="h5">{{ user.activity_level.replace('_', ' ')|title if user.activity_level else 'N/A' }}</p>
+                        </div>
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">Goal</label>
+                            <p class="h5">
+                                {% if user.goal %}
+                                    {% if user.goal == 'lose_weight' %}
+                                        <span class="badge bg-warning">Lose Weight</span>
+                                    {% elif user.goal == 'gain_weight' %}
+                                        <span class="badge bg-success">Gain Weight</span>
+                                    {% else %}
+                                        <span class="badge bg-info">Maintain Weight</span>
+                                    {% endif %}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <h6 class="text-muted">Quiz Not Completed</h6>
+                        <p class="text-muted">User hasn't completed the initial assessment quiz.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-bullseye me-2"></i>Calculated Goals
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if user.bmr and user.daily_calorie_goal %}
+                    <div class="row">
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">BMR (Basal Metabolic Rate)</label>
+                            <p class="h5">{{ user.bmr|round|int }} kcal/day</p>
+                        </div>
+                        <div class="col-sm-6 mb-3">
+                            <label class="text-muted small">Daily Calorie Goal</label>
+                            <p class="h5">{{ user.daily_calorie_goal|round|int }} kcal/day</p>
+                        </div>
+                        <div class="col-12">
+                            <div class="progress mb-2">
+                                {% set bmi = (user.weight / ((user.height/100) ** 2)) if user.weight and user.height else 0 %}
+                                {% if bmi > 0 %}
+                                    {% if bmi < 18.5 %}
+                                        <div class="progress-bar bg-info" style="width: {{ (bmi/30)*100 }}%"></div>
+                                    {% elif bmi < 25 %}
+                                        <div class="progress-bar bg-success" style="width: {{ (bmi/30)*100 }}%"></div>
+                                    {% elif bmi < 30 %}
+                                        <div class="progress-bar bg-warning" style="width: {{ (bmi/30)*100 }}%"></div>
+                                    {% else %}
+                                        <div class="progress-bar bg-danger" style="width: {{ (bmi/30)*100 }}%"></div>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">
+                                BMI: {{ "%.1f"|format(bmi) if bmi > 0 else 'N/A' }}
+                                {% if bmi > 0 %}
+                                    ({% if bmi < 18.5 %}Underweight{% elif bmi < 25 %}Normal{% elif bmi < 30 %}Overweight{% else %}Obese{% endif %})
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-calculator fa-3x text-muted mb-3"></i>
+                        <h6 class="text-muted">Goals Not Calculated</h6>
+                        <p class="text-muted">Complete profile information needed for calculations.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Food Logs -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-utensils me-2"></i>Recent Food Logs
+                </h6>
+                <span class="badge bg-primary">{{ food_logs|length }} logs</span>
+            </div>
+            <div class="card-body">
+                {% if food_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date & Time</th>
+                                    <th>Food</th>
+                                    <th>Calories</th>
+                                    <th>Protein</th>
+                                    <th>Method</th>
+                                    <th>Score</th>
+                                    <th>Confidence</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in food_logs %}
+                                <tr>
+                                    <td>
+                                        <div>{{ log.created_at.strftime('%m/%d/%y') }}</div>
+                                        <small class="text-muted">{{ log.created_at.strftime('%H:%M') }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">{{ log.food_name }}</div>
+                                        {% if log.raw_input and log.raw_input != log.food_name %}
+                                            <small class="text-muted">{{ log.raw_input[:50] }}...</small>
+                                        {% endif %}
+                                    </td>
+                                    <td><strong>{{ log.calories|round|int }}</strong> kcal</td>
+                                    <td>{{ log.protein|round(1) }}g</td>
+                                    <td>
+                                        {% if log.analysis_method == 'photo' %}
+                                            <span class="badge bg-primary"><i class="fas fa-camera"></i> Photo</span>
+                                        {% elif log.analysis_method == 'voice' %}
+                                            <span class="badge bg-info"><i class="fas fa-microphone"></i> Voice</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary"><i class="fas fa-keyboard"></i> Text</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% for i in range(1, 6) %}
+                                                {% if i <= log.food_score %}
+                                                    <i class="fas fa-star text-warning"></i>
+                                                {% else %}
+                                                    <i class="far fa-star text-muted"></i>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 6px;">
+                                            <div class="progress-bar" style="width: {{ (log.confidence_score * 100)|round }}%"></div>
+                                        </div>
+                                        <small class="text-muted">{{ (log.confidence_score * 100)|round }}%</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-utensils fa-4x text-muted mb-4"></i>
+                        <h5 class="text-muted">No Food Logs</h5>
+                        <p class="text-muted">This user hasn't logged any food yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Statistics Chart -->
+{% if daily_stats %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Daily Statistics (Last 30 Days)
+                </h6>
+            </div>
+            <div class="card-body">
+                <canvas id="dailyStatsChart" width="400" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.avatar-large {
+    width: 80px;
+    height: 80px;
+}
+
+.avatar-initial-large {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    font-size: 2rem;
+}
+
+.progress {
+    height: 20px;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshData() {
+    const refreshBtn = event.target.closest('button');
+    const originalText = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
+    refreshBtn.disabled = true;
+    
+    setTimeout(() => {
+        location.reload();
+    }, 1000);
+}
+
+// Chart functionality would be implemented here with proper data loading
+console.log('User detail page loaded successfully');
+</script>
+{% endblock %} 

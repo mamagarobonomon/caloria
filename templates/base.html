@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Caloria Admin Panel{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            margin: 2px 0;
+            transition: all 0.3s ease;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .content-wrapper {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.08);
+            transition: transform 0.2s ease;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .stat-card-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        .stat-card-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .stat-card-info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        .brand-text {
+            font-weight: bold;
+            font-size: 1.5rem;
+            color: white;
+        }
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <a class="navbar-brand" href="{{ url_for('admin_dashboard') }}">
+                            <i class="fas fa-utensils fa-2x"></i>
+                            <span class="brand-text">Caloria</span>
+                        </a>
+                        <hr class="text-white">
+                    </div>
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}" 
+                               href="{{ url_for('admin_dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-2"></i>
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}" 
+                               href="{{ url_for('admin_users') }}">
+                                <i class="fas fa-users me-2"></i>
+                                Users
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showAPIInfo()">
+                                <i class="fas fa-code me-2"></i>
+                                API Docs
+                            </a>
+                        </li>
+                        <li class="nav-item mt-4">
+                            <a class="nav-link" href="{{ url_for('admin_logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i>
+                                Logout
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 content-wrapper">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3">
+                    <h1 class="h2">{% block page_title %}Dashboard{% endblock %}</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        {% block page_actions %}{% endblock %}
+                    </div>
+                </div>
+
+                <!-- Flash messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{% if category == 'error' %}danger{% else %}{{ category }}{% endif %} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- API Documentation Modal -->
+    <div class="modal fade" id="apiModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">API Documentation</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>ManyChat Webhook Endpoint</h6>
+                    <p><code>POST /webhook/manychat</code></p>
+                    <p>This endpoint receives webhooks from ManyChat for food analysis and user interactions.</p>
+                    
+                    <h6>User Management API</h6>
+                    <p><code>GET /api/users</code> - Get all users (admin only)</p>
+                    <p><code>GET /api/users/{user_id}/stats</code> - Get user statistics</p>
+                    
+                    <h6>Environment Variables Required</h6>
+                    <ul>
+                        <li><code>SPOONACULAR_API_KEY</code> - For food analysis</li>
+                        <li><code>MANYCHAT_API_TOKEN</code> - For sending messages</li>
+                        <li><code>SECRET_KEY</code> - For session security</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function showAPIInfo() {
+            new bootstrap.Modal(document.getElementById('apiModal')).show();
+        }
+        
+        // Auto-hide alerts after 5 seconds
+        setTimeout(function() {
+            document.querySelectorAll('.alert').forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html> 

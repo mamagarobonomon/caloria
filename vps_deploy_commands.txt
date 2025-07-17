@@ -1,0 +1,54 @@
+# Commands to run on your King Servers VPS (162.248.225.106)
+# Copy and paste these commands one by one after connecting via SSH
+
+# 1. Download the deployment script
+wget https://raw.githubusercontent.com/mamagarobonomon/caloria/main/deploy_script.sh
+
+# 2. Make it executable
+chmod +x deploy_script.sh
+
+# 3. Edit the script to use your GitHub repository
+sed -i 's/YOUR-USERNAME/mamagarobonomon/g' deploy_script.sh
+
+# 4. Run the deployment script
+sudo ./deploy_script.sh
+
+# 5. After the script completes, set up production environment
+sudo -u caloria bash -c "
+cd /var/www/caloria
+source venv/bin/activate
+
+# Update the .env file with secure values
+cat > .env << 'EOF'
+SECRET_KEY=7J9b_3OdefZaC10a1B7Zi137WiC5yzc7l_UsBXo7zAI
+FLASK_ENV=production
+DATABASE_URL=postgresql://caloria_user:$(openssl rand -base64 32 | tr -d '=' | cut -c1-16)@localhost/caloria_db
+SPOONACULAR_API_KEY=3e0eac47470049d6845406463f223518
+MANYCHAT_API_TOKEN=your-manychat-token-here
+DEFAULT_ADMIN_USERNAME=admin
+DEFAULT_ADMIN_PASSWORD=$(openssl rand -base64 12)
+UPLOAD_FOLDER=/var/www/caloria/uploads
+MAX_CONTENT_LENGTH=16777216
+LOG_LEVEL=INFO
+DAILY_UPDATE_HOUR=20
+DAILY_UPDATE_MINUTE=0
+EOF
+
+# Initialize the database
+python -c 'from app import app, db; app.app_context().push(); db.create_all(); print(\"Database initialized!\")'
+"
+
+# 6. Start the application services
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start caloria
+
+# 7. Restart nginx
+sudo systemctl restart nginx
+
+# 8. Set up SSL certificate for caloria.vip
+sudo certbot --nginx -d caloria.vip -d www.caloria.vip --non-interactive --agree-tos --email your-email@example.com
+
+# 9. Check if everything is running
+sudo supervisorctl status caloria
+sudo systemctl status nginx 

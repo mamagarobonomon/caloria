@@ -968,4 +968,6 @@ if __name__ == '__main__':
     if not scheduler.running:
         scheduler.start()
     
-    app.run(debug=True) 
+    # Use port 5001 to avoid conflicts with other projects
+    port = int(os.getenv('PORT', 5001))
+    app.run(debug=True, host='0.0.0.0', port=port) 

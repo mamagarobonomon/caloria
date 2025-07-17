@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Caloria</title>
+    <meta name="description" content="Caloria Privacy Policy - How we collect, use, and protect your health and nutrition data.">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --bg-light: #f8fafc;
+            --bg-white: #ffffff;
+            --border-light: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.7;
+            color: var(--text-dark);
+        }
+
+        .navbar {
+            background: var(--bg-white);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            padding: 1rem 0;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color) !important;
+        }
+
+        .nav-link {
+            color: var(--text-dark) !important;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+
+        .hero-section {
+            background: linear-gradient(135deg, var(--bg-light) 0%, #fff 100%);
+            padding: 4rem 0 2rem;
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 1rem;
+        }
+
+        .hero-subtitle {
+            font-size: 1.2rem;
+            color: var(--text-light);
+            margin-bottom: 0;
+        }
+
+        .content-section {
+            padding: 3rem 0;
+        }
+
+        .section-title {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .subsection-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .highlight-box {
+            background: var(--bg-light);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+
+        .highlight-box .icon {
+            width: 60px;
+            height: 60px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .contact-section {
+            background: var(--bg-light);
+            padding: 3rem 0;
+            border-radius: 16px;
+            margin: 3rem 0;
+        }
+
+        .footer {
+            background: var(--text-dark);
+            color: white;
+            padding: 2rem 0;
+            margin-top: 3rem;
+        }
+
+        .footer-link {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer-link:hover {
+            color: white;
+        }
+
+        ul {
+            padding-left: 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        strong {
+            color: var(--text-dark);
+        }
+
+        .effective-date {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: inline-block;
+            margin-bottom: 2rem;
+        }
+
+        .table-of-contents {
+            background: var(--bg-white);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .table-of-contents ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .table-of-contents li {
+            margin-bottom: 0.75rem;
+        }
+
+        .table-of-contents a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .table-of-contents a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.25rem;
+            }
+            
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
+                <i class="fas fa-leaf me-2"></i>
+                Caloria
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('terms_conditions') }}">Terms</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_login') }}">Admin</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8">
+                    <h1 class="hero-title">Privacy Policy</h1>
+                    <p class="hero-subtitle">
+                        Your privacy and data security are our top priorities. Learn how we collect, use, and protect your health information.
+                    </p>
+                    <div class="effective-date">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Last updated: November 1, 2024
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Content Section -->
+    <div class="container content-section">
+        <!-- Table of Contents -->
+        <div class="table-of-contents">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">1. Overview</a></li>
+                <li><a href="#information-collection">2. Information We Collect</a></li>
+                <li><a href="#information-use">3. How We Use Your Information</a></li>
+                <li><a href="#information-sharing">4. Information Sharing</a></li>
+                <li><a href="#data-security">5. Data Security</a></li>
+                <li><a href="#your-rights">6. Your Rights</a></li>
+                <li><a href="#whatsapp-integration">7. WhatsApp Integration</a></li>
+                <li><a href="#cookies">8. Cookies and Tracking</a></li>
+                <li><a href="#children">9. Children's Privacy</a></li>
+                <li><a href="#international">10. International Transfers</a></li>
+                <li><a href="#changes">11. Changes to This Policy</a></li>
+                <li><a href="#contact">12. Contact Us</a></li>
+            </ul>
+        </div>
+
+        <!-- Overview -->
+        <div id="overview">
+            <h2 class="section-title">1. Overview</h2>
+            <div class="highlight-box">
+                <div class="icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <p><strong>HIPAA Compliance:</strong> Caloria is committed to protecting your health information in accordance with applicable privacy laws, including HIPAA where applicable.</p>
+                <p><strong>No Third-Party Sharing:</strong> We never sell, rent, or share your personal health data with third parties for marketing purposes.</p>
+                <p><strong>Data Minimization:</strong> We only collect and process data necessary to provide our nutrition tracking services.</p>
+            </div>
+            
+            <p>Caloria ("we," "our," or "us") provides AI-powered nutrition tracking services through WhatsApp. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our services.</p>
+            
+            <p>By using Caloria, you agree to the collection and use of information in accordance with this policy. If you do not agree with our policies and practices, do not use our services.</p>
+        </div>
+
+        <!-- Information Collection -->
+        <div id="information-collection">
+            <h2 class="section-title">2. Information We Collect</h2>
+            
+            <h3 class="subsection-title">2.1 Health and Nutrition Data</h3>
+            <ul>
+                <li><strong>Food Information:</strong> Photos, descriptions, and voice recordings of meals you share</li>
+                <li><strong>Personal Health Metrics:</strong> Weight, height, age, activity level, and health goals (when provided)</li>
+                <li><strong>Dietary Preferences:</strong> Food allergies, restrictions, and preferences</li>
+                <li><strong>Usage Patterns:</strong> Meal timing, frequency of logging, and interaction history</li>
+            </ul>
+
+            <h3 class="subsection-title">2.2 Communication Data</h3>
+            <ul>
+                <li><strong>WhatsApp Messages:</strong> Text, voice, and image messages sent to our bot</li>
+                <li><strong>Contact Information:</strong> WhatsApp phone number and profile information</li>
+                <li><strong>Message Metadata:</strong> Timestamps and message types for service improvement</li>
+            </ul>
+
+            <h3 class="subsection-title">2.3 Technical Data</h3>
+            <ul>
+                <li><strong>Device Information:</strong> Operating system, device type, and app version</li>
+                <li><strong>Usage Analytics:</strong> Feature usage, session duration, and error logs</li>
+                <li><strong>Location Data:</strong> Only if explicitly provided for local nutrition recommendations</li>
+            </ul>
+        </div>
+
+        <!-- Information Use -->
+        <div id="information-use">
+            <h2 class="section-title">3. How We Use Your Information</h2>
+            
+            <h3 class="subsection-title">3.1 Primary Services</h3>
+            <ul>
+                <li>Analyze food photos and descriptions to provide nutritional information</li>
+                <li>Calculate personalized daily calorie and macro targets</li>
+                <li>Track your progress toward health and nutrition goals</li>
+                <li>Provide personalized recommendations and insights</li>
+                <li>Generate daily and weekly nutrition summaries</li>
+            </ul>
+
+            <h3 class="subsection-title">3.2 Service Improvement</h3>
+            <ul>
+                <li>Improve AI accuracy for food recognition and analysis</li>
+                <li>Enhance user experience and interface design</li>
+                <li>Develop new features based on user needs</li>
+                <li>Conduct research for better nutrition recommendations</li>
+            </ul>
+
+            <h3 class="subsection-title">3.3 Communication</h3>
+            <ul>
+                <li>Send you nutrition insights and progress updates</li>
+                <li>Respond to your questions and support requests</li>
+                <li>Notify you of important service updates</li>
+                <li>Provide educational content about nutrition and health</li>
+            </ul>
+        </div>
+
+        <!-- Information Sharing -->
+        <div id="information-sharing">
+            <h2 class="section-title">4. Information Sharing</h2>
+            
+            <div class="highlight-box">
+                <div class="icon">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <h4>We DO NOT share your personal health data with:</h4>
+                <ul>
+                    <li>Marketing companies or advertisers</li>
+                    <li>Insurance companies</li>
+                    <li>Employers or potential employers</li>
+                    <li>Data brokers or analytics companies</li>
+                    <li>Social media platforms</li>
+                </ul>
+            </div>
+
+            <h3 class="subsection-title">4.1 Limited Sharing Scenarios</h3>
+            <p>We may share your information only in these specific circumstances:</p>
+            
+            <ul>
+                <li><strong>Service Providers:</strong> Trusted third-party services that help us operate (cloud hosting, AI processing) under strict data protection agreements</li>
+                <li><strong>Legal Requirements:</strong> When required by law, court order, or government request</li>
+                <li><strong>Safety Concerns:</strong> To protect the safety of users or prevent harm</li>
+                <li><strong>Business Transfers:</strong> In the event of a merger or acquisition (with continued privacy protection)</li>
+                <li><strong>With Your Consent:</strong> When you explicitly authorize sharing</li>
+            </ul>
+
+            <h3 class="subsection-title">4.2 Aggregated Data</h3>
+            <p>We may share anonymized, aggregated data that cannot identify you for research and public health purposes, such as nutrition trends and dietary patterns.</p>
+        </div>
+
+        <!-- Data Security -->
+        <div id="data-security">
+            <h2 class="section-title">5. Data Security</h2>
+            
+            <h3 class="subsection-title">5.1 Technical Safeguards</h3>
+            <ul>
+                <li><strong>Encryption:</strong> All data transmitted and stored is encrypted using industry-standard protocols</li>
+                <li><strong>Access Controls:</strong> Strict role-based access controls limit who can view your data</li>
+                <li><strong>Secure Infrastructure:</strong> Our servers are hosted in secure, HIPAA-compliant data centers</li>
+                <li><strong>Regular Audits:</strong> Periodic security assessments and vulnerability testing</li>
+                <li><strong>Data Backup:</strong> Secure, encrypted backups with disaster recovery procedures</li>
+            </ul>
+
+            <h3 class="subsection-title">5.2 Organizational Safeguards</h3>
+            <ul>
+                <li>Employee training on privacy and security practices</li>
+                <li>Signed confidentiality agreements for all staff</li>
+                <li>Incident response procedures for potential breaches</li>
+                <li>Regular privacy impact assessments</li>
+            </ul>
+
+            <h3 class="subsection-title">5.3 Data Retention</h3>
+            <p>We retain your personal data only as long as necessary to provide our services and comply with legal obligations:</p>
+            <ul>
+                <li><strong>Active Users:</strong> Data retained while your account is active</li>
+                <li><strong>Inactive Users:</strong> Data deleted after 3 years of inactivity</li>
+                <li><strong>Legal Compliance:</strong> Some data may be retained longer to comply with legal requirements</li>
+            </ul>
+        </div>
+
+        <!-- Your Rights -->
+        <div id="your-rights">
+            <h2 class="section-title">6. Your Rights</h2>
+            
+            <h3 class="subsection-title">6.1 Data Subject Rights (GDPR)</h3>
+            <p>If you are in the European Union, you have the following rights:</p>
+            <ul>
+                <li><strong>Access:</strong> Request a copy of your personal data</li>
+                <li><strong>Rectification:</strong> Correct inaccurate or incomplete data</li>
+                <li><strong>Erasure:</strong> Request deletion of your personal data</li>
+                <li><strong>Portability:</strong> Receive your data in a machine-readable format</li>
+                <li><strong>Restriction:</strong> Limit how we process your data</li>
+                <li><strong>Objection:</strong> Object to certain types of processing</li>
+                <li><strong>Withdraw Consent:</strong> Remove consent for data processing</li>
+            </ul>
+
+            <h3 class="subsection-title">6.2 How to Exercise Your Rights</h3>
+            <p>To exercise any of these rights, contact us at:</p>
+            <ul>
+                <li>Email: privacy@caloria.vip</li>
+                <li>WhatsApp: Send "DELETE MY DATA" to our bot</li>
+                <li>Admin Panel: Request data deletion through our interface</li>
+            </ul>
+
+            <p>We will respond to your request within 30 days (or as required by applicable law).</p>
+        </div>
+
+        <!-- WhatsApp Integration -->
+        <div id="whatsapp-integration">
+            <h2 class="section-title">7. WhatsApp Integration</h2>
+            
+            <h3 class="subsection-title">7.1 How It Works</h3>
+            <p>Caloria operates through WhatsApp using the ManyChat platform. When you interact with our bot:</p>
+            <ul>
+                <li>Your messages are processed through secure WhatsApp Business APIs</li>
+                <li>Food photos and voice messages are analyzed by our AI systems</li>
+                <li>Responses are sent back through WhatsApp's encrypted channels</li>
+                <li>All data processing follows WhatsApp's privacy standards</li>
+            </ul>
+
+            <h3 class="subsection-title">7.2 WhatsApp's Role</h3>
+            <p>WhatsApp/Meta acts as a data processor for messages sent to our bot. Their privacy policy applies to:</p>
+            <ul>
+                <li>Message transmission and delivery</li>
+                <li>WhatsApp account information</li>
+                <li>Message encryption and security</li>
+            </ul>
+
+            <p>We recommend reviewing <a href="https://www.whatsapp.com/legal/privacy-policy" target="_blank">WhatsApp's Privacy Policy</a> for complete information.</p>
+        </div>
+
+        <!-- Cookies -->
+        <div id="cookies">
+            <h2 class="section-title">8. Cookies and Tracking</h2>
+            
+            <h3 class="subsection-title">8.1 Website Cookies</h3>
+            <p>Our website (caloria.vip) uses cookies for:</p>
+            <ul>
+                <li><strong>Essential Functions:</strong> Login sessions and security</li>
+                <li><strong>Analytics:</strong> Understanding website usage patterns</li>
+                <li><strong>Preferences:</strong> Remembering your settings</li>
+            </ul>
+
+            <h3 class="subsection-title">8.2 WhatsApp Bot</h3>
+            <p>Our WhatsApp bot does not use cookies, but may collect:</p>
+            <ul>
+                <li>Message interaction data for service improvement</li>
+                <li>Usage patterns for personalization</li>
+                <li>Error logs for technical support</li>
+            </ul>
+
+            <h3 class="subsection-title">8.3 Your Choices</h3>
+            <p>You can control cookies through your browser settings. Disabling cookies may affect website functionality but will not impact the WhatsApp bot service.</p>
+        </div>
+
+        <!-- Children -->
+        <div id="children">
+            <h2 class="section-title">9. Children's Privacy</h2>
+            
+            <p>Caloria is not intended for use by children under 13 years of age. We do not knowingly collect personal information from children under 13.</p>
+            
+            <p>For users aged 13-18, we recommend parental supervision and guidance when using nutrition tracking services.</p>
+            
+            <p>If we become aware that we have collected personal information from a child under 13, we will take steps to delete such information promptly.</p>
+        </div>
+
+        <!-- International -->
+        <div id="international">
+            <h2 class="section-title">10. International Data Transfers</h2>
+            
+            <p>Your information may be transferred to and processed in countries other than your own, including the United States, for the purposes described in this policy.</p>
+            
+            <p>We ensure appropriate safeguards are in place for international transfers:</p>
+            <ul>
+                <li>Standard Contractual Clauses (SCCs) for EU data transfers</li>
+                <li>Adequacy decisions where applicable</li>
+                <li>Encryption and security measures during transfer</li>
+                <li>Compliance with local data protection laws</li>
+            </ul>
+        </div>
+
+        <!-- Changes -->
+        <div id="changes">
+            <h2 class="section-title">11. Changes to This Policy</h2>
+            
+            <p>We may update this Privacy Policy from time to time. When we make significant changes:</p>
+            <ul>
+                <li>We will notify you through WhatsApp or email</li>
+                <li>We will post the updated policy on our website</li>
+                <li>We will update the "Last updated" date</li>
+                <li>Continued use constitutes acceptance of changes</li>
+            </ul>
+            
+            <p>We encourage you to review this policy periodically to stay informed about how we protect your information.</p>
+        </div>
+
+        <!-- Contact -->
+        <div id="contact">
+            <h2 class="section-title">12. Contact Us</h2>
+            
+            <div class="contact-section">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h4>Privacy Questions</h4>
+                        <p><i class="fas fa-envelope me-2"></i> privacy@caloria.vip</p>
+                        <p><i class="fas fa-phone me-2"></i> Available through WhatsApp bot</p>
+                        <p><i class="fas fa-globe me-2"></i> caloria.vip/contact</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h4>Data Protection Officer</h4>
+                        <p><i class="fas fa-envelope me-2"></i> dpo@caloria.vip</p>
+                        <p><i class="fas fa-shield-alt me-2"></i> GDPR compliance inquiries</p>
+                        <p><i class="fas fa-balance-scale me-2"></i> Legal and regulatory matters</p>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <h5>Quick Actions</h5>
+                    <p>For immediate privacy-related actions, you can:</p>
+                    <ul>
+                        <li>Send "PRIVACY" to our WhatsApp bot for privacy settings</li>
+                        <li>Send "DELETE MY DATA" to request account deletion</li>
+                        <li>Send "EXPORT DATA" to receive a copy of your information</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p class="mb-0">&copy; 2024 Caloria. All rights reserved.</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <a href="{{ url_for('index') }}" class="footer-link me-3">Home</a>
+                    <a href="{{ url_for('terms_conditions') }}" class="footer-link me-3">Terms</a>
+                    <a href="{{ url_for('admin_login') }}" class="footer-link">Admin</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

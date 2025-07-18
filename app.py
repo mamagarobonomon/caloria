@@ -913,19 +913,19 @@ def format_analysis_response(analysis_result, daily_stats):
     calories_remaining = daily_stats.goal_calories - daily_stats.total_calories
     
     response = f"""
-📊 **Nutritional Analysis:**
+📊 *Nutritional Analysis:*
 🍽️ {analysis_result['food_name']}
-🔥 **Energy:** {analysis_result['calories']:.1f} kcal
-**Protein:** {analysis_result['protein']:.1f}g
-**Carbs:** {analysis_result['carbs']:.1f}g  
-**Fat:** {analysis_result['fat']:.1f}g
-**Fiber:** {analysis_result['fiber']:.1f}g
-**Sodium:** {analysis_result['sodium']:.0f}mg
+🔥 *Energy:* {analysis_result['calories']:.1f} kcal
+*Protein:* {analysis_result['protein']:.1f}g
+*Carbs:* {analysis_result['carbs']:.1f}g  
+*Fat:* {analysis_result['fat']:.1f}g
+*Fiber:* {analysis_result['fiber']:.1f}g
+*Sodium:* {analysis_result['sodium']:.0f}mg
 
-{score_emoji} **Overall Rating:** {score}/5 – {recommendation}
-✅ **Should you eat this?** {frequency}
+{score_emoji} *Overall Rating:* {score}/5 – {recommendation}
+✅ *Should you eat this?* {frequency}
 
-📈 **Today's Progress:**
+📈 *Today's Progress:*
 🎯 Goal: {daily_stats.goal_calories:.0f} kcal
 📊 Consumed: {daily_stats.total_calories:.0f} kcal
 ⚖️ Remaining: {calories_remaining:.0f} kcal

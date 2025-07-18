@@ -160,6 +160,7 @@ class FoodAnalysisService:
         try:
             api_key = app.config['SPOONACULAR_API_KEY']
             if not api_key:
+                app.logger.warning("No Spoonacular API key configured")
                 return FoodAnalysisService._fallback_analysis("Image analysis", user_description)
             
             # Read and encode image
@@ -174,12 +175,16 @@ class FoodAnalysisService:
                 "apiKey": api_key
             }
             
+            app.logger.info(f"Calling Spoonacular image analysis API...")
             response = requests.post(url, headers=headers, json=data, timeout=30)
+            app.logger.info(f"Spoonacular API status: {response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
+                app.logger.info(f"Spoonacular API response: {result}")
                 return FoodAnalysisService._process_spoonacular_response(result, user_description)
             else:
+                app.logger.error(f"Spoonacular API error: {response.status_code} - {response.text}")
                 return FoodAnalysisService._fallback_analysis("Image analysis", user_description)
                 
         except Exception as e:
@@ -317,16 +322,32 @@ class FoodAnalysisService:
         calorie_estimates = {
             'soup': 200, 'salad': 150, 'pizza': 300, 'burger': 500,
             'sandwich': 350, 'pasta': 400, 'rice': 200, 'bread': 80,
-            'apple': 80, 'banana': 105, 'chicken': 250, 'beef': 300,
-            'fish': 200, 'vegetables': 50, 'cheese': 100
+            'apple': 80, 'banana': 105, 'orange': 60, 'strawberry': 32, 'strawberries': 32,
+            'chicken': 250, 'beef': 300, 'fish': 200, 'vegetables': 50, 'cheese': 100,
+            'berry': 40, 'berries': 40, 'fruit': 60, 'yogurt': 100, 'nuts': 200
         }
         
         estimated_calories = 250  # default
-        food_name = description or "Unknown food"
+        food_name = description or "food item"
+        
+        # If it's image analysis and no description, use a more helpful message
+        if analysis_type == "Image analysis" and not description:
+            food_name = "food item (couldn't identify automatically)"
+            estimated_calories = 100  # Lower default for unknown items
         
         for keyword, calories in calorie_estimates.items():
             if keyword in description_lower:
                 estimated_calories = calories
+                if keyword in ['strawberry', 'strawberries']:
+                    food_name = "strawberries"
+                elif keyword in ['apple']:
+                    food_name = "apple"  
+                elif keyword in ['banana']:
+                    food_name = "banana"
+                elif keyword in ['berry', 'berries']:
+                    food_name = "mixed berries"
+                else:
+                    food_name = keyword
                 break
         
         return {
@@ -722,6 +743,16 @@ def handle_image_input(user, data):
             # Analyze image
             analysis_result = FoodAnalysisService.analyze_food_image(filepath, user_text)
             
+            # If image analysis failed but we have user text, try text analysis as backup
+            if (analysis_result.get('confidence_score', 0) < 0.5 and 
+                user_text and len(user_text.strip()) > 0):
+                app.logger.info(f"Image analysis low confidence, trying text analysis with: '{user_text}'")
+                text_analysis = FoodAnalysisService.analyze_food_text(user_text)
+                # Use text analysis if it has higher confidence
+                if text_analysis.get('confidence_score', 0) > analysis_result.get('confidence_score', 0):
+                    analysis_result = text_analysis
+                    app.logger.info("Using text analysis result instead of image analysis")
+            
             # Create food log
             food_log = FoodLog(
                 user_id=user.id,
@@ -967,6 +998,11 @@ def format_analysis_response(analysis_result, daily_stats):
     # Calculate calories remaining
     calories_remaining = daily_stats.goal_calories - daily_stats.total_calories
     
+    # Check if this was a low-confidence automatic analysis
+    low_confidence_note = ""
+    if analysis_result.get('confidence_score', 1.0) < 0.5 and "couldn't identify automatically" in analysis_result['food_name']:
+        low_confidence_note = "\n\n🤖 I couldn't identify your food automatically. For better accuracy, try sending a text description like 'strawberries' or 'grilled chicken'!"
+    
     response = f"""
 📊 NUTRITIONAL ANALYSIS
 🍽️ {analysis_result['food_name']}
@@ -986,7 +1022,7 @@ def format_analysis_response(analysis_result, daily_stats):
 📊 Consumed: {daily_stats.total_calories:.0f} kcal
 ⚖️ Remaining: {calories_remaining:.0f} kcal
 
-💡 Add leafy greens to boost fiber!
+💡 Add leafy greens to boost fiber!{low_confidence_note}
     """.strip()
     
     return response

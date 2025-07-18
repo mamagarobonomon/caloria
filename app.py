@@ -576,7 +576,11 @@ def manychat_webhook():
             db.session.commit()
         
         # Handle different types of content
-        content_type = data.get('type')
+        content_type = data.get('type', 'text')  # Default to 'text' if missing
+        
+        # If type is empty string or None, default to text if we have text content
+        if not content_type and data.get('text'):
+            content_type = 'text'
         
         if content_type == 'text':
             return handle_text_input(user, data)
@@ -587,6 +591,9 @@ def manychat_webhook():
         elif content_type == 'quiz_response':
             return handle_quiz_response(user, data)
         else:
+            # If we have text but unrecognized type, treat as text
+            if data.get('text'):
+                return handle_text_input(user, data)
             return jsonify({'message': 'Content type not supported'}), 400
             
     except Exception as e:

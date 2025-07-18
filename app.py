@@ -632,7 +632,7 @@ def handle_text_input(user, data):
     # Format response message
     response_text = format_analysis_response(analysis_result, daily_stats)
     
-    # Return ManyChat dynamic block format
+    # Return ManyChat dynamic block format with simple mapping field
     return jsonify({
         "version": "v2",
         "content": {
@@ -642,7 +642,9 @@ def handle_text_input(user, data):
                     "text": response_text
                 }
             ]
-        }
+        },
+        "response_text": response_text,  # Simple field for mapping
+        "food_log_id": food_log.id
     })
 
 def handle_image_input(user, data):

@@ -563,6 +563,13 @@ def manychat_webhook():
         data = request.get_json()
         app.logger.info(f"Received ManyChat webhook: {data}")
         
+        # DEBUG: Log all the keys to see what ManyChat actually sends
+        app.logger.info(f"Webhook data keys: {list(data.keys())}")
+        if 'attachments' in data:
+            app.logger.info(f"Attachments found: {data['attachments']}")
+        if 'attachment' in data:
+            app.logger.info(f"Attachment found: {data['attachment']}")
+        
         # Extract user information
         subscriber_id = data.get('subscriber_id')
         if not subscriber_id:
@@ -581,6 +588,11 @@ def manychat_webhook():
         # If type is empty string or None, default to text if we have text content
         if not content_type and data.get('text'):
             content_type = 'text'
+        
+        # Check for attachments (images/files) even if type isn't explicitly 'image'
+        if data.get('attachments') or data.get('image_url') or data.get('attachment'):
+            content_type = 'image'
+            app.logger.info(f"Detected image content, switching to image handler")
         
         if content_type == 'text':
             return handle_text_input(user, data)
@@ -651,13 +663,40 @@ def handle_text_input(user, data):
 
 def handle_image_input(user, data):
     """Handle image input from user"""
-    image_url = data.get('image_url')
+    # Try multiple possible fields for image URL
+    image_url = None
+    
+    # Check different possible field names for image URL
+    possible_fields = ['image_url', 'url', 'attachment_url']
+    for field in possible_fields:
+        if data.get(field):
+            image_url = data.get(field)
+            break
+    
+    # Check attachments array
+    if not image_url and data.get('attachments'):
+        attachments = data.get('attachments')
+        if isinstance(attachments, list) and len(attachments) > 0:
+            # Get first attachment
+            attachment = attachments[0]
+            if isinstance(attachment, dict):
+                image_url = attachment.get('url') or attachment.get('image_url')
+    
+    # Check single attachment object
+    if not image_url and data.get('attachment'):
+        attachment = data.get('attachment')
+        if isinstance(attachment, dict):
+            image_url = attachment.get('url') or attachment.get('image_url')
+    
+    app.logger.info(f"Extracted image_url: {image_url}")
     user_text = data.get('text', '')  # Optional description
     
     if not image_url:
+        app.logger.error(f"No image URL found in data: {data}")
         return jsonify({
             "version": "v2",
             "content": {
+                "type": data.get('platform', 'telegram'),
                 "messages": [
                     {
                         "type": "text",
@@ -709,10 +748,14 @@ def handle_image_input(user, data):
             # Format response message
             response_text = format_analysis_response(analysis_result, daily_stats)
             
+            # Get platform from request data, default to telegram
+            platform = data.get('platform', 'telegram')
+            
             # Return ManyChat dynamic block format
             return jsonify({
                 "version": "v2",
                 "content": {
+                    "type": platform,
                     "messages": [
                         {
                             "type": "text",
@@ -725,6 +768,7 @@ def handle_image_input(user, data):
             return jsonify({
                 "version": "v2",
                 "content": {
+                    "type": data.get('platform', 'telegram'),
                     "messages": [
                         {
                             "type": "text",
@@ -739,6 +783,7 @@ def handle_image_input(user, data):
         return jsonify({
             "version": "v2",
             "content": {
+                "type": data.get('platform', 'telegram'),
                 "messages": [
                     {
                         "type": "text",

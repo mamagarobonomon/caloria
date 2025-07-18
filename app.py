@@ -923,19 +923,19 @@ def format_analysis_response(analysis_result, daily_stats):
     calories_remaining = daily_stats.goal_calories - daily_stats.total_calories
     
     response = f"""
-📊 **Nutritional Analysis:**
+📊 <b>Nutritional Analysis:</b>
 🍽️ {analysis_result['food_name']}
-🔥 **Energy:** {analysis_result['calories']:.1f} kcal
-**Protein:** {analysis_result['protein']:.1f}g
-**Carbs:** {analysis_result['carbs']:.1f}g  
-**Fat:** {analysis_result['fat']:.1f}g
-**Fiber:** {analysis_result['fiber']:.1f}g
-**Sodium:** {analysis_result['sodium']:.0f}mg
+🔥 <b>Energy:</b> {analysis_result['calories']:.1f} kcal
+<b>Protein:</b> {analysis_result['protein']:.1f}g
+<b>Carbs:</b> {analysis_result['carbs']:.1f}g  
+<b>Fat:</b> {analysis_result['fat']:.1f}g
+<b>Fiber:</b> {analysis_result['fiber']:.1f}g
+<b>Sodium:</b> {analysis_result['sodium']:.0f}mg
 
-{score_emoji} **Overall Rating:** {score}/5 – {recommendation}
-✅ **Should you eat this?** {frequency}
+{score_emoji} <b>Overall Rating:</b> {score}/5 – {recommendation}
+✅ <b>Should you eat this?</b> {frequency}
 
-📈 **Today's Progress:**
+📈 <b>Today's Progress:</b>
 🎯 Goal: {daily_stats.goal_calories:.0f} kcal
 📊 Consumed: {daily_stats.total_calories:.0f} kcal
 ⚖️ Remaining: {calories_remaining:.0f} kcal

@@ -632,10 +632,14 @@ def handle_text_input(user, data):
     # Format response message
     response_text = format_analysis_response(analysis_result, daily_stats)
     
-    # Return proper ManyChat dynamic block format
+    # Get platform from request data, default to telegram
+    platform = data.get('platform', 'telegram')
+    
+    # Return proper ManyChat dynamic block format with platform type
     return jsonify({
         "version": "v2",
         "content": {
+            "type": platform,
             "messages": [
                 {
                     "type": "text",

@@ -632,9 +632,17 @@ def handle_text_input(user, data):
     # Format response message
     response_text = format_analysis_response(analysis_result, daily_stats)
     
+    # Return ManyChat dynamic block format
     return jsonify({
-        'response_text': response_text,
-        'food_log_id': food_log.id
+        "version": "v2",
+        "content": {
+            "messages": [
+                {
+                    "type": "text",
+                    "text": response_text
+                }
+            ]
+        }
     })
 
 def handle_image_input(user, data):
@@ -643,7 +651,17 @@ def handle_image_input(user, data):
     user_text = data.get('text', '')  # Optional description
     
     if not image_url:
-        return jsonify({'error': 'No image URL provided'}), 400
+        return jsonify({
+            "version": "v2",
+            "content": {
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": "❌ No image received. Please send a photo of your food!"
+                    }
+                ]
+            }
+        }), 400
     
     try:
         # Download and save image
@@ -687,23 +705,61 @@ def handle_image_input(user, data):
             # Format response message
             response_text = format_analysis_response(analysis_result, daily_stats)
             
+            # Return ManyChat dynamic block format
             return jsonify({
-                'response_text': response_text,
-                'food_log_id': food_log.id
+                "version": "v2",
+                "content": {
+                    "messages": [
+                        {
+                            "type": "text",
+                            "text": response_text
+                        }
+                    ]
+                }
             })
         else:
-            return jsonify({'error': 'Could not download image'}), 400
+            return jsonify({
+                "version": "v2",
+                "content": {
+                    "messages": [
+                        {
+                            "type": "text",
+                            "text": "❌ Could not download your image. Please try again!"
+                        }
+                    ]
+                }
+            }), 400
             
     except Exception as e:
         app.logger.error(f"Image processing error: {str(e)}")
-        return jsonify({'error': 'Error processing image'}), 500
+        return jsonify({
+            "version": "v2",
+            "content": {
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": "❌ Error processing your image. Please try again!"
+                    }
+                ]
+            }
+        }), 500
 
 def handle_audio_input(user, data):
     """Handle audio input from user"""
     audio_url = data.get('audio_url')
     
     if not audio_url:
-        return jsonify({'error': 'No audio URL provided'}), 400
+        return jsonify({
+            "version": "v2",
+            "content": {
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": "❌ No audio received. Please send a voice message!"
+                    }
+                ]
+            }
+        }), 400
     
     try:
         # Download audio file
@@ -749,16 +805,44 @@ def handle_audio_input(user, data):
             # Clean up audio file
             os.remove(filepath)
             
+            # Return ManyChat dynamic block format
             return jsonify({
-                'response_text': response_text,
-                'food_log_id': food_log.id
+                "version": "v2",
+                "content": {
+                    "messages": [
+                        {
+                            "type": "text",
+                            "text": response_text
+                        }
+                    ]
+                }
             })
         else:
-            return jsonify({'error': 'Could not download audio'}), 400
+            return jsonify({
+                "version": "v2",
+                "content": {
+                    "messages": [
+                        {
+                            "type": "text",
+                            "text": "❌ Could not download your audio. Please try again!"
+                        }
+                    ]
+                }
+            }), 400
             
     except Exception as e:
         app.logger.error(f"Audio processing error: {str(e)}")
-        return jsonify({'error': 'Error processing audio'}), 500
+        return jsonify({
+            "version": "v2",
+            "content": {
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": "❌ Error processing your audio. Please try again!"
+                    }
+                ]
+            }
+        }), 500
 
 def handle_quiz_response(user, data):
     """Handle quiz responses from user"""
@@ -800,9 +884,17 @@ Your personalized profile:
 Ready to start tracking your meals! Send me photos, descriptions, or voice messages of your food, and I'll help you stay on track! 📸🍽️
     """.strip()
     
+    # Return ManyChat dynamic block format
     return jsonify({
-        'response_text': welcome_message,
-        'user_id': user.id
+        "version": "v2",
+        "content": {
+            "messages": [
+                {
+                    "type": "text",
+                    "text": welcome_message
+                }
+            ]
+        }
     })
 
 def format_analysis_response(analysis_result, daily_stats):

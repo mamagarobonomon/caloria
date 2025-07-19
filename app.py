@@ -798,15 +798,26 @@ def manychat_webhook():
             app.logger.info("📋 Detected Full Contact Data format from ManyChat")
             contact_data = data
             subscriber_id = str(data.get('id'))
-            app.logger.info(f"Subscriber ID from contact data: {subscriber_id}")
+            app.logger.info(f"Subscriber ID from Full Contact Data: {subscriber_id}")
             
-            # Check if this is just a profile update (no message content)
-            last_input_text = contact_data.get('last_input_text')
-            if last_input_text is None:
-                app.logger.warning("⚠️ Full Contact Data has no message content (last_input_text is null)")
-                app.logger.warning("This appears to be a profile update or empty message")
+            # Get or create user first with the subscriber_id we have
+            user = User.query.filter_by(whatsapp_id=subscriber_id).first()
+            if not user:
+                app.logger.info(f"Creating new user with WhatsApp ID: {subscriber_id}")
+                user = User(whatsapp_id=subscriber_id)
                 
-                # Return a helpful message asking user to send content
+                # Populate user info from contact data
+                if contact_data.get('first_name'):
+                    user.first_name = contact_data.get('first_name')
+                if contact_data.get('last_name'):
+                    user.last_name = contact_data.get('last_name')
+                
+                db.session.add(user)
+                db.session.commit()
+                
+                # Send welcome message for new user
+                welcome_name = contact_data.get('first_name', 'there')
+                app.logger.info(f"Sending welcome message to new user: {welcome_name}")
                 return jsonify({
                     "version": "v2",
                     "content": {
@@ -814,11 +825,52 @@ def manychat_webhook():
                         "messages": [
                             {
                                 "type": "text",
-                                "text": "👋 Hi! I'm your AI nutrition assistant!\n\n📸 Send me a photo of your food\n📝 Or describe what you're eating\n🎤 Or send a voice message\n\nI'll analyze the nutritional content and help you track your calories! 🥗"
+                                "text": f"🎉 Welcome to Caloria, {welcome_name}!\n\n🤖 I'm your AI nutrition assistant ready to help you track your meals!\n\n📸 **Send me a photo** of your food\n📝 **Type what you're eating** (e.g., 'grilled chicken salad')\n🎤 **Send a voice message** describing your meal\n\nI'll analyze the nutritional content and help you reach your health goals! 🥗✨"
                             }
                         ]
                     }
                 })
+            
+            # Check if this is just a profile update (no message content)
+            last_input_text = contact_data.get('last_input_text')
+            if last_input_text is None or last_input_text == "":
+                app.logger.info("ℹ️ Full Contact Data has no current message content")
+                
+                # Check if user has sent messages before (returning user)
+                food_logs_count = FoodLog.query.filter_by(user_id=user.id).count()
+                if food_logs_count > 0:
+                    app.logger.info(f"Returning user with {food_logs_count} previous food logs")
+                    # For returning users, send a brief prompt
+                    return jsonify({
+                        "version": "v2",
+                        "content": {
+                            "type": "telegram",
+                            "messages": [
+                                {
+                                    "type": "text",
+                                    "text": f"Hello again, {user.first_name or 'there'}! 👋\n\n📸 Send me a photo of your food\n📝 Or tell me what you're eating\n\nI'm ready to help you track your nutrition! 🥗"
+                                }
+                            ]
+                        }
+                    })
+                else:
+                    # For users with no previous logs, send more detailed instructions
+                    return jsonify({
+                        "version": "v2",
+                        "content": {
+                            "type": "telegram",
+                            "messages": [
+                                {
+                                    "type": "text",
+                                    "text": "👋 Hi! I'm your AI nutrition assistant!\n\n📸 Send me a photo of your food\n📝 Or describe what you're eating\n🎤 Or send a voice message\n\nI'll analyze the nutritional content and help you track your calories! 🥗"
+                                }
+                            ]
+                        }
+                    })
+            
+            # If we have message content in Full Contact Data, process it
+            app.logger.info(f"Processing Full Contact Data with message: '{last_input_text}'")
+            
         else:
             # Legacy format - extract subscriber_id from various possible fields
             print(f"🔍 Checking for subscriber_id in legacy format...")
@@ -841,37 +893,14 @@ def manychat_webhook():
             app.logger.error("No subscriber_id found in webhook data")
             return jsonify({'error': 'No subscriber_id provided'}), 400
         
-        # Get or create user
-        user = User.query.filter_by(whatsapp_id=subscriber_id).first()
-        if not user:
-            app.logger.info(f"Creating new user with WhatsApp ID: {subscriber_id}")
-            user = User(whatsapp_id=subscriber_id)
-            
-            # If we have contact data, populate user info
-            if contact_data:
-                if contact_data.get('first_name'):
-                    user.first_name = contact_data.get('first_name')
-                if contact_data.get('last_name'):
-                    user.last_name = contact_data.get('last_name')
-            
-            db.session.add(user)
-            db.session.commit()
-            
-            # For new users with Full Contact Data (no message), send welcome message
-            if contact_data and contact_data.get('last_input_text') is None:
-                welcome_name = contact_data.get('first_name', 'there')
-                return jsonify({
-                    "version": "v2",
-                    "content": {
-                        "type": "telegram",
-                        "messages": [
-                            {
-                                "type": "text",
-                                "text": f"🎉 Welcome to Caloria, {welcome_name}!\n\n🤖 I'm your AI nutrition assistant ready to help you track your meals!\n\n📸 **Send me a photo** of your food\n📝 **Type what you're eating** (e.g., 'grilled chicken salad')\n🎤 **Send a voice message** describing your meal\n\nI'll analyze the nutritional content and help you reach your health goals! 🥗✨"
-                            }
-                        ]
-                    }
-                })
+        # Get or create user (for legacy format)
+        if not contact_data:  # Only if we haven't already handled this above
+            user = User.query.filter_by(whatsapp_id=subscriber_id).first()
+            if not user:
+                app.logger.info(f"Creating new user with WhatsApp ID: {subscriber_id}")
+                user = User(whatsapp_id=subscriber_id)
+                db.session.add(user)
+                db.session.commit()
         
         # DETERMINE CONTENT TYPE AND EXTRACT DATA
         content_type = 'text'  # Default
@@ -885,7 +914,6 @@ def manychat_webhook():
             app.logger.info(f"Text from contact data: '{text_content}'")
             
             # Check if Full Contact Data contains image/attachment information
-            # Look for attachment fields in the contact data
             attachment_fields = ['attachment', 'attachments', 'image_url', 'file_url', 'media_url', 'photo_url']
             for field in attachment_fields:
                 if contact_data.get(field):
@@ -895,22 +923,6 @@ def manychat_webhook():
                     app.logger.info(f"Found image field in contact data: {field} = {contact_data.get(field)}")
                     break
                     
-            # If no text and no attachments found, this might be an empty webhook
-            if not text_content and not has_image:
-                app.logger.warning("⚠️ No message content found in Full Contact Data")
-                return jsonify({
-                    "version": "v2",
-                    "content": {
-                        "type": "telegram",
-                        "messages": [
-                            {
-                                "type": "text",
-                                "text": "🤔 I didn't receive any content to analyze.\n\n📸 Please send a photo of your food\n📝 Or type what you're eating\n🎤 Or send a voice message!\n\nI'm here to help you track your nutrition! 😊"
-                            }
-                        ]
-                    }
-                })
-                
             if text_content and text_content.strip():
                 content_type = 'text'
                 app.logger.info(f"Detected text content: '{text_content}'")
@@ -977,12 +989,12 @@ def manychat_webhook():
                 }
                 return handle_text_input(user, normalized_data)
             
-            # Log detailed error for debugging
+            # For Full Contact Data with no message content, we've already handled this above
+            # This should only trigger for legacy format with no content
             app.logger.error(f"❌ NO PROCESSABLE CONTENT FOUND")
             app.logger.error(f"Content type: {content_type}")
             app.logger.error(f"Text content: '{text_content}'")
             app.logger.error(f"Has image: {has_image}")
-            app.logger.error(f"Available data keys: {list(data.keys())}")
             
             # Return helpful message for empty content
             return jsonify({

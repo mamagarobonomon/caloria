@@ -55,7 +55,7 @@ sudo certbot --nginx -d caloria.vip -d www.caloria.vip --non-interactive --agree
 
 # 9. Check if everything is running
 sudo supervisorctl status caloria
-sudo systemctl status nginx
+sudo systemctl status nginx 
 
 # FOR UPDATING EXISTING DEPLOYMENT:
 # ssh vps@162.248.225.106

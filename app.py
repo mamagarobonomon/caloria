@@ -773,6 +773,16 @@ def manychat_webhook():
     """Handle incoming webhooks from ManyChat"""
     try:
         data = request.get_json()
+        
+        # EXPLICIT DEBUG LOGGING FOR MANYCHAT TROUBLESHOOTING
+        print("=" * 80)
+        print("🔍 MANYCHAT WEBHOOK DEBUG - FULL DATA:")
+        print("=" * 80)
+        print(json.dumps(data, indent=2))
+        print("=" * 80)
+        print(f"Data keys: {list(data.keys())}")
+        print("=" * 80)
+        
         app.logger.info(f"Received ManyChat webhook: {data}")
         
         # COMPREHENSIVE DEBUG LOGGING for troubleshooting
@@ -811,15 +821,23 @@ def manychat_webhook():
                 })
         else:
             # Legacy format - extract subscriber_id from various possible fields
+            print(f"🔍 Checking for subscriber_id in legacy format...")
+            print(f"subscriber_id field: {data.get('subscriber_id')}")
+            print(f"id field: {data.get('id')}")
+            print(f"user_id field: {data.get('user_id')}")
+            print(f"contact field: {data.get('contact')}")
+            
             subscriber_id = data.get('subscriber_id') or data.get('id') or data.get('user_id')
             if data.get('contact'):
                 contact_data = data.get('contact')
                 if isinstance(contact_data, dict) and contact_data.get('id'):
                     subscriber_id = str(contact_data.get('id'))
         
+        print(f"🎯 Final extracted subscriber_id: {subscriber_id}")
         app.logger.info(f"Final subscriber_id: {subscriber_id}")
         
         if not subscriber_id:
+            print("❌ ERROR: No subscriber_id found!")
             app.logger.error("No subscriber_id found in webhook data")
             return jsonify({'error': 'No subscriber_id provided'}), 400
         

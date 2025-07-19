@@ -784,11 +784,31 @@ def manychat_webhook():
         subscriber_id = None
         
         # Check if this is Full Contact Data format
-        if 'id' in data and 'key' in data and 'last_input_text' in data:
+        if 'id' in data and 'key' in data and data.get('key', '').startswith('user:'):
             app.logger.info("📋 Detected Full Contact Data format from ManyChat")
             contact_data = data
             subscriber_id = str(data.get('id'))
             app.logger.info(f"Subscriber ID from contact data: {subscriber_id}")
+            
+            # Check if this is just a profile update (no message content)
+            last_input_text = contact_data.get('last_input_text')
+            if last_input_text is None:
+                app.logger.warning("⚠️ Full Contact Data has no message content (last_input_text is null)")
+                app.logger.warning("This appears to be a profile update or empty message")
+                
+                # Return a helpful message asking user to send content
+                return jsonify({
+                    "version": "v2",
+                    "content": {
+                        "type": "telegram",
+                        "messages": [
+                            {
+                                "type": "text",
+                                "text": "👋 Hi! I'm your AI nutrition assistant!\n\n📸 Send me a photo of your food\n📝 Or describe what you're eating\n🎤 Or send a voice message\n\nI'll analyze the nutritional content and help you track your calories! 🥗"
+                            }
+                        ]
+                    }
+                })
         else:
             # Legacy format - extract subscriber_id from various possible fields
             subscriber_id = data.get('subscriber_id') or data.get('id') or data.get('user_id')
@@ -818,6 +838,22 @@ def manychat_webhook():
             
             db.session.add(user)
             db.session.commit()
+            
+            # For new users with Full Contact Data (no message), send welcome message
+            if contact_data and contact_data.get('last_input_text') is None:
+                welcome_name = contact_data.get('first_name', 'there')
+                return jsonify({
+                    "version": "v2",
+                    "content": {
+                        "type": "telegram",
+                        "messages": [
+                            {
+                                "type": "text",
+                                "text": f"🎉 Welcome to Caloria, {welcome_name}!\n\n🤖 I'm your AI nutrition assistant ready to help you track your meals!\n\n📸 **Send me a photo** of your food\n📝 **Type what you're eating** (e.g., 'grilled chicken salad')\n🎤 **Send a voice message** describing your meal\n\nI'll analyze the nutritional content and help you reach your health goals! 🥗✨"
+                            }
+                        ]
+                    }
+                })
         
         # DETERMINE CONTENT TYPE AND EXTRACT DATA
         content_type = 'text'  # Default
@@ -827,26 +863,39 @@ def manychat_webhook():
         
         if contact_data:
             # Extract text from Full Contact Data
-            text_content = contact_data.get('last_input_text', '')
+            text_content = contact_data.get('last_input_text') or ''
             app.logger.info(f"Text from contact data: '{text_content}'")
             
-            # TODO: Check if Full Contact Data contains image/attachment information
-            # For now, we'll determine content type based on text presence
+            # Check if Full Contact Data contains image/attachment information
+            # Look for attachment fields in the contact data
+            attachment_fields = ['attachment', 'attachments', 'image_url', 'file_url', 'media_url', 'photo_url']
+            for field in attachment_fields:
+                if contact_data.get(field):
+                    has_image = True
+                    image_fields_found.append(f'contact_data.{field}')
+                    content_type = 'image'
+                    app.logger.info(f"Found image field in contact data: {field} = {contact_data.get(field)}")
+                    break
+                    
+            # If no text and no attachments found, this might be an empty webhook
+            if not text_content and not has_image:
+                app.logger.warning("⚠️ No message content found in Full Contact Data")
+                return jsonify({
+                    "version": "v2",
+                    "content": {
+                        "type": "telegram",
+                        "messages": [
+                            {
+                                "type": "text",
+                                "text": "🤔 I didn't receive any content to analyze.\n\n📸 Please send a photo of your food\n📝 Or type what you're eating\n🎤 Or send a voice message!\n\nI'm here to help you track your nutrition! 😊"
+                            }
+                        ]
+                    }
+                })
+                
             if text_content and text_content.strip():
                 content_type = 'text'
                 app.logger.info(f"Detected text content: '{text_content}'")
-            else:
-                # If no text, might be an image - but we need to find where ManyChat puts image URLs in Full Contact Data
-                app.logger.info("No text content found, checking for other content types...")
-                # Check if there are any attachment-related fields in contact_data
-                attachment_fields = ['attachment', 'attachments', 'image_url', 'file_url', 'media_url']
-                for field in attachment_fields:
-                    if contact_data.get(field):
-                        has_image = True
-                        image_fields_found.append(f'contact_data.{field}')
-                        content_type = 'image'
-                        app.logger.info(f"Found image field in contact data: {field} = {contact_data.get(field)}")
-                        break
         else:
             # Legacy format handling
             text_content = data.get('text', '')
@@ -911,25 +960,25 @@ def manychat_webhook():
                 return handle_text_input(user, normalized_data)
             
             # Log detailed error for debugging
-            app.logger.error(f"❌ NO CONTENT TO PROCESS")
+            app.logger.error(f"❌ NO PROCESSABLE CONTENT FOUND")
             app.logger.error(f"Content type: {content_type}")
             app.logger.error(f"Text content: '{text_content}'")
             app.logger.error(f"Has image: {has_image}")
             app.logger.error(f"Available data keys: {list(data.keys())}")
-            app.logger.error(f"Full data for debugging: {json.dumps(data, indent=2)}")
             
+            # Return helpful message for empty content
             return jsonify({
-                'message': f'No processable content found. Content type: {content_type}, Text: "{text_content}", Has image: {has_image}',
-                'debug_info': {
-                    'received_type': content_type,
-                    'available_fields': list(data.keys()),
-                    'has_text': bool(text_content),
-                    'text_content': text_content,
-                    'has_image': has_image,
-                    'image_fields_found': image_fields_found,
-                    'contact_data_keys': list(contact_data.keys()) if contact_data else None
+                "version": "v2",
+                "content": {
+                    "type": "telegram",
+                    "messages": [
+                        {
+                            "type": "text",
+                            "text": "🤷‍♀️ I didn't receive any content to analyze.\n\n💡 **How to use me:**\n📸 Send a photo of your food\n📝 Type what you're eating (e.g., 'pizza slice')\n🎤 Send a voice message\n\nI'll provide detailed nutritional analysis! 🥗📊"
+                        }
+                    ]
                 }
-            }), 400
+            })
             
     except Exception as e:
         app.logger.error(f"❌ WEBHOOK ERROR: {str(e)}")

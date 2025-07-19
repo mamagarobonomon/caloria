@@ -2,8 +2,14 @@
 # IMPORTANT: Always connect using 'vps' user, NOT root!
 # Copy and paste these commands one by one after connecting via SSH
 
+# OPTIONAL: Setup SSH Keys for passwordless access (run on your LOCAL machine):
+# ssh-keygen -t ed25519 -C "your-email@caloria-vps" -f ~/.ssh/id_ed25519 -N ""
+# ssh-copy-id -i ~/.ssh/id_ed25519.pub vps@162.248.225.106
+# After SSH setup, use: ssh caloria (see SAFE_DEPLOYMENT_GUIDE.md for full SSH config)
+
 # Connect to server using vps user:
 # ssh vps@162.248.225.106
+# OR with SSH keys: ssh caloria
 
 # 1. Download the deployment script
 wget https://raw.githubusercontent.com/mamagarobonomon/caloria/main/deploy_script.sh
@@ -58,5 +64,9 @@ sudo supervisorctl status caloria
 sudo systemctl status nginx 
 
 # FOR UPDATING EXISTING DEPLOYMENT:
-# ssh vps@162.248.225.106
-# cd /var/www/caloria && sudo -u caloria bash -c 'git pull origin main && source venv/bin/activate && pip install -r requirements.txt' && sudo supervisorctl restart caloria-vip 
+# With password: ssh vps@162.248.225.106
+# With SSH keys: ssh caloria
+# cd /var/www/caloria && sudo -u caloria bash -c 'git pull origin main && source venv/bin/activate && pip install -r requirements.txt' && sudo supervisorctl restart caloria-vip
+
+# ONE-LINE UPDATE WITH SSH KEYS:
+# ssh caloria "cd /var/www/caloria && sudo -u caloria bash -c 'git pull origin main && source venv/bin/activate && pip install -r requirements.txt && pkill -f gunicorn && nohup gunicorn --bind 127.0.0.1:5001 --workers 2 --timeout 300 app:app > logs/gunicorn.log 2>&1 &'" 

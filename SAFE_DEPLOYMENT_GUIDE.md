@@ -34,6 +34,68 @@ ssh your-username@162.248.225.106
 
 ---
 
+## 🔑 **Step 1.5: Setup SSH Keys (Recommended)**
+
+**For secure, passwordless access - no more typing passwords!**
+
+### **Generate SSH Key (on your local machine):**
+```bash
+# Generate SSH key pair
+ssh-keygen -t ed25519 -C "your-email@caloria-vps" -f ~/.ssh/id_ed25519 -N ""
+
+# Copy public key to VPS (enter password one last time)
+ssh-copy-id -i ~/.ssh/id_ed25519.pub vps@162.248.225.106
+```
+
+### **Create SSH Config for Easy Access:**
+```bash
+# Create SSH config file
+cat >> ~/.ssh/config << 'EOF'
+# Caloria VPS Configuration
+Host caloria-vps
+    HostName 162.248.225.106
+    User vps
+    IdentityFile ~/.ssh/id_ed25519
+    PasswordAuthentication no
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+# Alias for easier access
+Host caloria
+    HostName 162.248.225.106
+    User vps
+    IdentityFile ~/.ssh/id_ed25519
+    PasswordAuthentication no
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+EOF
+
+# Set secure permissions
+chmod 600 ~/.ssh/config
+```
+
+### **Test SSH Key Authentication:**
+```bash
+# Test passwordless connection
+ssh caloria "echo 'SSH key working!' && whoami"
+
+# Should connect without password prompt
+```
+
+### **Easy Commands After SSH Setup:**
+```bash
+# Connect instantly
+ssh caloria
+
+# Quick deployment update
+ssh caloria "cd /var/www/caloria && sudo -u caloria git pull"
+
+# Full deployment update
+ssh caloria "cd /var/www/caloria && sudo -u caloria bash -c 'git pull origin main && source venv/bin/activate && pip install -r requirements.txt && pkill -f gunicorn && nohup gunicorn --bind 127.0.0.1:5001 --workers 2 --timeout 300 app:app > logs/gunicorn.log 2>&1 &'"
+```
+
+---
+
 ## 🚀 **Step 2: Safe Deployment (Multi-Project Compatible)**
 
 Once connected to your VPS with your username:
@@ -179,14 +241,23 @@ Your Caloria deployment is **completely isolated**:
 - **Your Username**: `_____________` (from King Servers email)
 - **Your Password**: `_____________` (from King Servers)
 
-### **Connection Command:**
+### **Connection Commands:**
 ```bash
+# With password (initial setup)
 ssh YOUR_USERNAME@162.248.225.106
+
+# With SSH keys (after setup)
+ssh caloria
 ```
 
 ### **One-Line Deployment:**
 ```bash
 wget https://raw.githubusercontent.com/mamagarobonomon/caloria/main/safe_deploy_script.sh && chmod +x safe_deploy_script.sh && sudo ./safe_deploy_script.sh
+```
+
+### **One-Line Update (with SSH keys):**
+```bash
+ssh caloria "cd /var/www/caloria && sudo -u caloria bash -c 'git pull origin main && source venv/bin/activate && pip install -r requirements.txt && pkill -f gunicorn && nohup gunicorn --bind 127.0.0.1:5001 --workers 2 --timeout 300 app:app > logs/gunicorn.log 2>&1 &'"
 ```
 
 ---

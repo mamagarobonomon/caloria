@@ -65,9 +65,11 @@ git push -u origin main
 
 ### Initial Connection
 
+**⚠️ IMPORTANT: Always use 'vps' user, NOT root!**
+
 ```bash
-# Connect to your VPS via SSH
-ssh root@YOUR_SERVER_IP
+# Connect to your VPS via SSH using vps user
+ssh vps@YOUR_SERVER_IP
 
 # Update the deployment script with your GitHub URL
 # Download our deployment script
@@ -409,7 +411,7 @@ sudo supervisorctl status caloria-vip
 
 **Connect to your VPS:**
 ```bash
-ssh root@162.248.225.106
+ssh vps@162.248.225.106
 ```
 
 **Then run:**

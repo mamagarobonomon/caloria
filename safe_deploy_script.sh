@@ -5,9 +5,10 @@
 
 echo "🛡️ Starting SAFE Caloria deployment (multi-project compatible)..."
 
-# Check if running as root
+# Check if running with sudo privileges
 if [ "$EUID" -ne 0 ]; then
-    echo "❌ Please run as root: sudo ./safe_deploy_script.sh"
+    echo "❌ Please run with sudo: sudo ./safe_deploy_script.sh"
+    echo "ℹ️  Note: Connect to server as 'vps' user, then run: sudo ./safe_deploy_script.sh"
     exit 1
 fi
 

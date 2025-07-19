@@ -1,5 +1,9 @@
 # Commands to run on your King Servers VPS (162.248.225.106)
+# IMPORTANT: Always connect using 'vps' user, NOT root!
 # Copy and paste these commands one by one after connecting via SSH
+
+# Connect to server using vps user:
+# ssh vps@162.248.225.106
 
 # 1. Download the deployment script
 wget https://raw.githubusercontent.com/mamagarobonomon/caloria/main/deploy_script.sh
@@ -51,4 +55,8 @@ sudo certbot --nginx -d caloria.vip -d www.caloria.vip --non-interactive --agree
 
 # 9. Check if everything is running
 sudo supervisorctl status caloria
-sudo systemctl status nginx 
+sudo systemctl status nginx
+
+# FOR UPDATING EXISTING DEPLOYMENT:
+# ssh vps@162.248.225.106
+# cd /var/www/caloria && sudo -u caloria bash -c 'git pull origin main && source venv/bin/activate && pip install -r requirements.txt' && sudo supervisorctl restart caloria-vip 

@@ -778,99 +778,121 @@ def manychat_webhook():
         # COMPREHENSIVE DEBUG LOGGING for troubleshooting
         app.logger.info(f"=== ManyChat Webhook Debug Info ===")
         app.logger.info(f"Raw JSON keys: {list(data.keys())}")
-        app.logger.info(f"Content type field: {data.get('type', 'NOT_SET')}")
-        app.logger.info(f"Has text: {bool(data.get('text'))}")
-        app.logger.info(f"Text content: {data.get('text', 'NO_TEXT')}")
         
-        # Check for various attachment fields that ManyChat might use
-        attachment_fields = [
-            'attachments', 'attachment', 'image_url', 'url', 'attachment_url',
-            'media', 'media_url', 'file_url', 'photo', 'photo_url', 'image',
-            'file', 'files', 'document', 'document_url'
-        ]
+        # Handle Full Contact Data format from ManyChat
+        contact_data = None
+        subscriber_id = None
         
-        for field in attachment_fields:
-            if field in data:
-                app.logger.info(f"Found attachment field '{field}': {data[field]}")
+        # Check if this is Full Contact Data format
+        if 'id' in data and 'key' in data and 'last_input_text' in data:
+            app.logger.info("📋 Detected Full Contact Data format from ManyChat")
+            contact_data = data
+            subscriber_id = str(data.get('id'))
+            app.logger.info(f"Subscriber ID from contact data: {subscriber_id}")
+        else:
+            # Legacy format - extract subscriber_id from various possible fields
+            subscriber_id = data.get('subscriber_id') or data.get('id') or data.get('user_id')
+            if data.get('contact'):
+                contact_data = data.get('contact')
+                if isinstance(contact_data, dict) and contact_data.get('id'):
+                    subscriber_id = str(contact_data.get('id'))
         
-        # Log the complete data structure for debugging
-        app.logger.info(f"Complete webhook data: {json.dumps(data, indent=2)}")
+        app.logger.info(f"Final subscriber_id: {subscriber_id}")
         
-        # Extract user information
-        subscriber_id = data.get('subscriber_id')
         if not subscriber_id:
+            app.logger.error("No subscriber_id found in webhook data")
             return jsonify({'error': 'No subscriber_id provided'}), 400
         
         # Get or create user
         user = User.query.filter_by(whatsapp_id=subscriber_id).first()
         if not user:
+            app.logger.info(f"Creating new user with WhatsApp ID: {subscriber_id}")
             user = User(whatsapp_id=subscriber_id)
+            
+            # If we have contact data, populate user info
+            if contact_data:
+                if contact_data.get('first_name'):
+                    user.first_name = contact_data.get('first_name')
+                if contact_data.get('last_name'):
+                    user.last_name = contact_data.get('last_name')
+            
             db.session.add(user)
             db.session.commit()
         
-        # ENHANCED IMAGE DETECTION - Check multiple possible formats
+        # DETERMINE CONTENT TYPE AND EXTRACT DATA
+        content_type = 'text'  # Default
+        text_content = ''
         has_image = False
         image_fields_found = []
         
-        # Check for direct image URL fields
-        direct_url_fields = ['image_url', 'url', 'attachment_url', 'media_url', 'photo_url', 'file_url', 'document_url']
-        for field in direct_url_fields:
-            if data.get(field):
-                has_image = True
-                image_fields_found.append(field)
-                app.logger.info(f"Found direct image URL in field: {field}")
-        
-        # Check attachments array
-        if data.get('attachments'):
-            attachments = data.get('attachments')
-            if isinstance(attachments, list) and len(attachments) > 0:
+        if contact_data:
+            # Extract text from Full Contact Data
+            text_content = contact_data.get('last_input_text', '')
+            app.logger.info(f"Text from contact data: '{text_content}'")
+            
+            # TODO: Check if Full Contact Data contains image/attachment information
+            # For now, we'll determine content type based on text presence
+            if text_content and text_content.strip():
+                content_type = 'text'
+                app.logger.info(f"Detected text content: '{text_content}'")
+            else:
+                # If no text, might be an image - but we need to find where ManyChat puts image URLs in Full Contact Data
+                app.logger.info("No text content found, checking for other content types...")
+                # Check if there are any attachment-related fields in contact_data
+                attachment_fields = ['attachment', 'attachments', 'image_url', 'file_url', 'media_url']
+                for field in attachment_fields:
+                    if contact_data.get(field):
+                        has_image = True
+                        image_fields_found.append(f'contact_data.{field}')
+                        content_type = 'image'
+                        app.logger.info(f"Found image field in contact data: {field} = {contact_data.get(field)}")
+                        break
+        else:
+            # Legacy format handling
+            text_content = data.get('text', '')
+            content_type = data.get('type', 'text')
+            
+            # Check for legacy image detection
+            direct_url_fields = ['image_url', 'url', 'attachment_url', 'media_url', 'photo_url', 'file_url', 'document_url']
+            for field in direct_url_fields:
+                if data.get(field):
+                    has_image = True
+                    image_fields_found.append(field)
+                    content_type = 'image'
+                    app.logger.info(f"Found direct image URL in field: {field}")
+                    break
+            
+            # Check attachments in legacy format
+            if not has_image and data.get('attachments'):
                 has_image = True
                 image_fields_found.append('attachments')
-                app.logger.info(f"Found attachments array with {len(attachments)} items")
-                
-                # Log details of each attachment
-                for i, attachment in enumerate(attachments):
-                    app.logger.info(f"Attachment {i}: {attachment}")
-            elif isinstance(attachments, dict):
-                has_image = True
-                image_fields_found.append('attachments')
-                app.logger.info(f"Found attachments object: {attachments}")
+                content_type = 'image'
         
-        # Check single attachment object
-        if data.get('attachment'):
-            has_image = True
-            image_fields_found.append('attachment')
-            app.logger.info(f"Found single attachment: {data.get('attachment')}")
-        
-        # Check for other media fields
-        media_fields = ['media', 'photo', 'image', 'file', 'files', 'document']
-        for field in media_fields:
-            if data.get(field):
-                has_image = True
-                image_fields_found.append(field)
-                app.logger.info(f"Found media in field: {field}")
-        
-        # Determine content type with enhanced logic
-        content_type = data.get('type', 'text')  # Default to 'text' if missing
-        
-        # If we detected any image-related fields, override content type
+        # Override content type if we detected image
         if has_image:
             content_type = 'image'
             app.logger.info(f"🖼️ DETECTED IMAGE CONTENT from fields: {image_fields_found}")
         
-        # If type is empty string or None, default to text if we have text content
-        if not content_type and data.get('text'):
-            content_type = 'text'
-        
         app.logger.info(f"Final determined content_type: {content_type}")
+        app.logger.info(f"Text content: '{text_content}'")
         
         # Route to appropriate handler
-        if content_type == 'text':
+        if content_type == 'text' and text_content.strip():
             app.logger.info("Routing to text handler")
-            return handle_text_input(user, data)
+            # Create a normalized data structure for text handler
+            normalized_data = {
+                'text': text_content,
+                'platform': 'telegram',
+                'contact_data': contact_data
+            }
+            return handle_text_input(user, normalized_data)
         elif content_type == 'image':
             app.logger.info("Routing to image handler")
-            return handle_image_input(user, data)
+            # Create a normalized data structure for image handler
+            normalized_data = data.copy() if not contact_data else contact_data.copy()
+            normalized_data['platform'] = 'telegram'
+            normalized_data['text'] = text_content  # Optional description
+            return handle_image_input(user, normalized_data)
         elif content_type == 'audio':
             app.logger.info("Routing to audio handler")
             return handle_audio_input(user, data)
@@ -879,22 +901,33 @@ def manychat_webhook():
             return handle_quiz_response(user, data)
         else:
             # Enhanced fallback - if we have text but unrecognized type, treat as text
-            if data.get('text'):
+            if text_content and text_content.strip():
                 app.logger.info("Unrecognized type but has text, routing to text handler")
-                return handle_text_input(user, data)
+                normalized_data = {
+                    'text': text_content,
+                    'platform': 'telegram',
+                    'contact_data': contact_data
+                }
+                return handle_text_input(user, normalized_data)
             
             # Log detailed error for debugging
-            app.logger.error(f"❌ UNSUPPORTED CONTENT TYPE: {content_type}")
+            app.logger.error(f"❌ NO CONTENT TO PROCESS")
+            app.logger.error(f"Content type: {content_type}")
+            app.logger.error(f"Text content: '{text_content}'")
+            app.logger.error(f"Has image: {has_image}")
             app.logger.error(f"Available data keys: {list(data.keys())}")
             app.logger.error(f"Full data for debugging: {json.dumps(data, indent=2)}")
             
             return jsonify({
-                'message': f'Content type not supported: {content_type}',
+                'message': f'No processable content found. Content type: {content_type}, Text: "{text_content}", Has image: {has_image}',
                 'debug_info': {
                     'received_type': content_type,
                     'available_fields': list(data.keys()),
-                    'has_text': bool(data.get('text')),
-                    'image_fields_found': image_fields_found
+                    'has_text': bool(text_content),
+                    'text_content': text_content,
+                    'has_image': has_image,
+                    'image_fields_found': image_fields_found,
+                    'contact_data_keys': list(contact_data.keys()) if contact_data else None
                 }
             }), 400
             

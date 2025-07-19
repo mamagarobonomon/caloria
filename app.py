@@ -775,12 +775,90 @@ def manychat_webhook():
         data = request.get_json()
         app.logger.info(f"Received ManyChat webhook: {data}")
         
-        # Handle Full Contact Data format from ManyChat
+        # Handle different ManyChat webhook formats
         contact_data = None
         subscriber_id = None
         
-        # Check if this is Full Contact Data format
-        if 'id' in data and 'key' in data and data.get('key', '').startswith('user:'):
+        # DETECT EXTERNAL MESSAGE CALLBACK FORMAT
+        if ('subscriber_id' in data or 'attachment_url' in data or 'message_text' in data):
+            app.logger.info("📨 Detected External Message Callback format from ManyChat")
+            print("📨 Detected External Message Callback format from ManyChat")
+            
+            # Extract subscriber ID
+            subscriber_id = data.get('subscriber_id') or data.get('user_id') or data.get('id')
+            if subscriber_id:
+                subscriber_id = str(subscriber_id)
+                app.logger.info(f"Subscriber ID from External Message Callback: {subscriber_id}")
+                print(f"Subscriber ID from External Message Callback: {subscriber_id}")
+                
+                # Get or create user
+                user = User.query.filter_by(whatsapp_id=subscriber_id).first()
+                if not user:
+                    app.logger.info(f"Creating new user from External Message Callback: {subscriber_id}")
+                    print(f"Creating new user from External Message Callback: {subscriber_id}")
+                    user = User(whatsapp_id=subscriber_id)
+                    
+                    # Get user info if available
+                    if data.get('first_name'):
+                        user.first_name = data.get('first_name')
+                    if data.get('last_name'):
+                        user.last_name = data.get('last_name')
+                    
+                    db.session.add(user)
+                    db.session.commit()
+                
+                # HANDLE EXTERNAL MESSAGE CALLBACK CONTENT
+                message_text = data.get('message_text') or data.get('last_input_text') or ''
+                attachment_url = data.get('attachment_url') or data.get('last_input_attachment_url')
+                message_type = data.get('message_type') or data.get('last_input_type')
+                
+                app.logger.info(f"External Message Callback - Text: '{message_text}', Attachment: '{attachment_url}', Type: '{message_type}'")
+                print(f"External Message Callback - Text: '{message_text}', Attachment: '{attachment_url}', Type: '{message_type}'")
+                
+                # Route based on content type
+                if attachment_url and attachment_url.strip():
+                    app.logger.info("🖼️ Processing image from External Message Callback")
+                    print("🖼️ Processing image from External Message Callback")
+                    # Create normalized data for image handler
+                    normalized_data = {
+                        'image_url': attachment_url,
+                        'attachment_url': attachment_url,
+                        'url': attachment_url,
+                        'text': message_text,
+                        'platform': 'telegram'
+                    }
+                    return handle_image_input(user, normalized_data)
+                elif message_text and message_text.strip():
+                    app.logger.info("📝 Processing text from External Message Callback")
+                    print("📝 Processing text from External Message Callback")
+                    # Create normalized data for text handler
+                    normalized_data = {
+                        'text': message_text,
+                        'platform': 'telegram'
+                    }
+                    return handle_text_input(user, normalized_data)
+                else:
+                    app.logger.info("ℹ️ External Message Callback with no content, sending prompt")
+                    print("ℹ️ External Message Callback with no content, sending prompt")
+                    return jsonify({
+                        "version": "v2",
+                        "content": {
+                            "type": "telegram",
+                            "messages": [
+                                {
+                                    "type": "text",
+                                    "text": f"Hi {user.first_name or 'there'}! 👋\n\n📸 Send me a photo of your food\n📝 Or tell me what you're eating\n\nI'm ready to analyze your nutrition! 🥗"
+                                }
+                            ]
+                        }
+                    })
+            else:
+                app.logger.error("No subscriber_id found in External Message Callback")
+                print("No subscriber_id found in External Message Callback")
+                return jsonify({'error': 'No subscriber_id provided in External Message Callback'}), 400
+        
+        # DETECT FULL CONTACT DATA FORMAT (for user profiles)
+        elif 'id' in data and 'key' in data and data.get('key', '').startswith('user:'):
             app.logger.info("📋 Detected Full Contact Data format from ManyChat")
             print("📋 Detected Full Contact Data format from ManyChat")
             
@@ -870,9 +948,9 @@ def manychat_webhook():
                 db.session.add(user)
                 db.session.commit()
                 
-                # Send welcome message for new user
+                # Send welcome message with External Message Callback for new user
                 welcome_name = contact_data.get('first_name', 'there')
-                app.logger.info(f"Sending welcome message to new user: {welcome_name}")
+                app.logger.info(f"Sending welcome message with External Message Callback to new user: {welcome_name}")
                 return jsonify({
                     "version": "v2",
                     "content": {
@@ -880,9 +958,22 @@ def manychat_webhook():
                         "messages": [
                             {
                                 "type": "text",
-                                "text": f"🎉 Welcome to Caloria, {welcome_name}!\n\n🤖 I'm your AI nutrition assistant ready to help you track your meals!\n\n📸 **Send me a photo** of your food\n📝 **Type what you're eating** (e.g., 'grilled chicken salad')\n🎤 **Send a voice message** describing your meal\n\nI'll analyze the nutritional content and help you reach your health goals! 🥗✨"
+                                "text": f"🎉 Welcome to Caloria, {welcome_name}!\n\n🤖 I'm your AI nutrition assistant ready to help you track your meals!\n\n📸 **Send me a photo** of your food and I'll analyze it!"
                             }
-                        ]
+                        ],
+                        "external_message_callback": {
+                            "url": "https://caloria.vip/webhook/manychat",
+                            "method": "post",
+                            "payload": {
+                                "subscriber_id": "{{user_id}}",
+                                "first_name": "{{first_name}}",
+                                "last_name": "{{last_name}}",
+                                "message_text": "{{last_input_text}}",
+                                "attachment_url": "{{last_input_attachment_url}}",
+                                "message_type": "{{last_input_type}}"
+                            },
+                            "timeout": 1800
+                        }
                     }
                 })
             
@@ -902,8 +993,8 @@ def manychat_webhook():
                 # Check if user has sent messages before (returning user)
                 food_logs_count = FoodLog.query.filter_by(user_id=user.id).count()
                 if food_logs_count > 0:
-                    app.logger.info(f"Returning user with {food_logs_count} previous food logs")
-                    # For returning users, send a brief prompt
+                    app.logger.info(f"Returning user with {food_logs_count} previous food logs - sending External Message Callback")
+                    # For returning users, send a brief prompt with External Message Callback
                     return jsonify({
                         "version": "v2",
                         "content": {
@@ -913,11 +1004,24 @@ def manychat_webhook():
                                     "type": "text",
                                     "text": f"Hello again, {user.first_name or 'there'}! 👋\n\n📸 Send me a photo of your food\n📝 Or tell me what you're eating\n\nI'm ready to help you track your nutrition! 🥗"
                                 }
-                            ]
+                            ],
+                            "external_message_callback": {
+                                "url": "https://caloria.vip/webhook/manychat",
+                                "method": "post",
+                                "payload": {
+                                    "subscriber_id": "{{user_id}}",
+                                    "first_name": "{{first_name}}",
+                                    "last_name": "{{last_name}}",
+                                    "message_text": "{{last_input_text}}",
+                                    "attachment_url": "{{last_input_attachment_url}}",
+                                    "message_type": "{{last_input_type}}"
+                                },
+                                "timeout": 1800
+                            }
                         }
                     })
                 else:
-                    # For users with no previous logs, send more detailed instructions
+                    # For users with no previous logs, send more detailed instructions with External Message Callback
                     return jsonify({
                         "version": "v2",
                         "content": {
@@ -927,7 +1031,20 @@ def manychat_webhook():
                                     "type": "text",
                                     "text": "👋 Hi! I'm your AI nutrition assistant!\n\n📸 Send me a photo of your food\n📝 Or describe what you're eating\n🎤 Or send a voice message\n\nI'll analyze the nutritional content and help you track your calories! 🥗"
                                 }
-                            ]
+                            ],
+                            "external_message_callback": {
+                                "url": "https://caloria.vip/webhook/manychat",
+                                "method": "post",
+                                "payload": {
+                                    "subscriber_id": "{{user_id}}",
+                                    "first_name": "{{first_name}}",
+                                    "last_name": "{{last_name}}",
+                                    "message_text": "{{last_input_text}}",
+                                    "attachment_url": "{{last_input_attachment_url}}",
+                                    "message_type": "{{last_input_type}}"
+                                },
+                                "timeout": 1800
+                            }
                         }
                     })
             
@@ -1105,7 +1222,7 @@ def handle_text_input(user, data):
     # Get platform from request data, default to telegram
     platform = data.get('platform', 'telegram')
     
-    # Return proper ManyChat dynamic block format with platform type
+    # Return ManyChat dynamic block format with External Message Callback for continued interaction
     return jsonify({
         "version": "v2",
         "content": {
@@ -1113,9 +1230,22 @@ def handle_text_input(user, data):
             "messages": [
                 {
                     "type": "text",
-                    "text": response_text
+                    "text": response_text + "\n\n📸 Send another photo or 📝 describe more food to continue tracking!"
                 }
-            ]
+            ],
+            "external_message_callback": {
+                "url": "https://caloria.vip/webhook/manychat",
+                "method": "post",
+                "payload": {
+                    "subscriber_id": "{{user_id}}",
+                    "first_name": "{{first_name}}",
+                    "last_name": "{{last_name}}",
+                    "message_text": "{{last_input_text}}",
+                    "attachment_url": "{{last_input_attachment_url}}",
+                    "message_type": "{{last_input_type}}"
+                },
+                "timeout": 3600
+            }
         }
     })
 
@@ -1303,7 +1433,7 @@ def handle_image_input(user, data):
             
             app.logger.info(f"✅ Image analysis completed successfully")
             
-            # Return ManyChat dynamic block format
+            # Return ManyChat dynamic block format with External Message Callback for continued interaction
             return jsonify({
                 "version": "v2",
                 "content": {
@@ -1311,9 +1441,22 @@ def handle_image_input(user, data):
                     "messages": [
                         {
                             "type": "text",
-                            "text": response_text
+                            "text": response_text + "\n\n📸 Send another photo or 📝 describe more food to continue tracking!"
                         }
-                    ]
+                    ],
+                    "external_message_callback": {
+                        "url": "https://caloria.vip/webhook/manychat",
+                        "method": "post",
+                        "payload": {
+                            "subscriber_id": "{{user_id}}",
+                            "first_name": "{{first_name}}",
+                            "last_name": "{{last_name}}",
+                            "message_text": "{{last_input_text}}",
+                            "attachment_url": "{{last_input_attachment_url}}",
+                            "message_type": "{{last_input_type}}"
+                        },
+                        "timeout": 3600
+                    }
                 }
             })
         else:

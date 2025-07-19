@@ -14,6 +14,8 @@ from PIL import Image
 import io
 import base64
 import hashlib
+import tempfile
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'caloria-secret-key-change-in-production')
@@ -27,6 +29,7 @@ app.config['SPOONACULAR_API_KEY'] = os.environ.get('SPOONACULAR_API_KEY')
 app.config['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY')
 app.config['GOOGLE_CLOUD_API_KEY'] = os.environ.get('GOOGLE_CLOUD_API_KEY')
 app.config['MANYCHAT_API_TOKEN'] = os.environ.get('MANYCHAT_API_TOKEN')
+app.config['TELEGRAM_BOT_TOKEN'] = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 db = SQLAlchemy(app)
 CORS(app)
@@ -779,8 +782,150 @@ def manychat_webhook():
         contact_data = None
         subscriber_id = None
         
+        # DETECT TELEGRAM FILE_ID FORMAT (External Request from ManyChat)
+        if ('file_id' in data or 'telegram_file_id' in data):
+            app.logger.info("📁 Detected Telegram file_id format from ManyChat External Request")
+            print("📁 Detected Telegram file_id format from ManyChat External Request")
+            
+            # Extract file_id and subscriber info
+            file_id = data.get('file_id') or data.get('telegram_file_id')
+            subscriber_id = data.get('subscriber_id') or data.get('user_id') or data.get('id')
+            
+            if file_id and subscriber_id:
+                subscriber_id = str(subscriber_id)
+                app.logger.info(f"Processing Telegram file_id: {file_id} for subscriber: {subscriber_id}")
+                print(f"Processing Telegram file_id: {file_id} for subscriber: {subscriber_id}")
+                
+                # Get Telegram Bot Token
+                telegram_bot_token = app.config.get('TELEGRAM_BOT_TOKEN')
+                if not telegram_bot_token:
+                    app.logger.error("❌ TELEGRAM_BOT_TOKEN not configured")
+                    return jsonify({
+                        "version": "v2", 
+                        "content": {
+                            "type": "telegram",
+                            "messages": [{
+                                "type": "text",
+                                "text": "❌ Telegram Bot Token not configured. Please contact support."
+                            }]
+                        }
+                    }), 500
+                
+                # Get or create user
+                user = User.query.filter_by(whatsapp_id=subscriber_id).first()
+                if not user:
+                    app.logger.info(f"Creating new user from file_id request: {subscriber_id}")
+                    print(f"Creating new user from file_id request: {subscriber_id}")
+                    user = User(whatsapp_id=subscriber_id)
+                    
+                    # Get user info if available
+                    if data.get('first_name'):
+                        user.first_name = data.get('first_name')
+                    if data.get('last_name'):
+                        user.last_name = data.get('last_name')
+                    
+                    db.session.add(user)
+                    db.session.commit()
+                
+                # Download image using Telegram Bot API
+                app.logger.info(f"📥 Downloading image via Telegram Bot API")
+                print(f"📥 Downloading image via Telegram Bot API")
+                
+                image_filepath = download_telegram_image(file_id, telegram_bot_token)
+                if not image_filepath:
+                    app.logger.error("Failed to download image from Telegram")
+                    return jsonify({
+                        "version": "v2",
+                        "content": {
+                            "type": "telegram", 
+                            "messages": [{
+                                "type": "text",
+                                "text": "❌ Failed to download your image. Please try again!"
+                            }]
+                        }
+                    }), 400
+                
+                # Process the downloaded image
+                app.logger.info(f"🖼️ Processing downloaded Telegram image: {image_filepath}")
+                print(f"🖼️ Processing downloaded Telegram image: {image_filepath}")
+                
+                try:
+                    # Get optional description text
+                    user_text = data.get('message_text') or data.get('description') or ''
+                    
+                    # Analyze image
+                    analysis_result = FoodAnalysisService.analyze_food_image(image_filepath, user_text)
+                    
+                    # If image analysis failed but we have user text, try text analysis as backup
+                    if (analysis_result.get('confidence_score', 0) < 0.5 and 
+                        user_text and len(user_text.strip()) > 0):
+                        app.logger.info(f"Image analysis low confidence, trying text analysis with: '{user_text}'")
+                        text_analysis = FoodAnalysisService.analyze_food_text(user_text)
+                        # Use text analysis if it has higher confidence
+                        if text_analysis.get('confidence_score', 0) > analysis_result.get('confidence_score', 0):
+                            analysis_result = text_analysis
+                            app.logger.info("Using text analysis result instead of image analysis")
+                    
+                    # Create food log
+                    food_log = FoodLog(
+                        user_id=user.id,
+                        food_name=analysis_result['food_name'],
+                        calories=analysis_result['calories'],
+                        protein=analysis_result['protein'],
+                        carbs=analysis_result['carbs'],
+                        fat=analysis_result['fat'],
+                        fiber=analysis_result['fiber'],
+                        sodium=analysis_result['sodium'],
+                        food_score=analysis_result['food_score'],
+                        analysis_method='telegram_photo',
+                        raw_input=user_text,
+                        image_path=image_filepath,
+                        confidence_score=analysis_result['confidence_score']
+                    )
+                    
+                    db.session.add(food_log)
+                    db.session.commit()
+                    
+                    # Update daily stats
+                    daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
+                    
+                    # Format response message
+                    response_text = format_analysis_response(analysis_result, daily_stats)
+                    
+                    app.logger.info(f"✅ Telegram image analysis completed successfully")
+                    print(f"✅ Telegram image analysis completed successfully")
+                    
+                    # Return ManyChat response (no external_message_callback needed for External Request)
+                    return jsonify({
+                        "version": "v2",
+                        "content": {
+                            "type": "telegram",
+                            "messages": [{
+                                "type": "text",
+                                "text": response_text + "\n\n📸 Send another photo or 📝 describe more food to continue tracking!"
+                            }]
+                        }
+                    })
+                    
+                except Exception as e:
+                    app.logger.error(f"Error processing Telegram image: {str(e)}")
+                    return jsonify({
+                        "version": "v2",
+                        "content": {
+                            "type": "telegram",
+                            "messages": [{
+                                "type": "text", 
+                                "text": f"❌ Error analyzing your image: {str(e)}. Please try again!"
+                            }]
+                        }
+                    }), 500
+            else:
+                missing_field = "file_id" if not file_id else "subscriber_id"
+                app.logger.error(f"Missing {missing_field} in Telegram file_id request")
+                return jsonify({'error': f'Missing {missing_field} in request'}), 400
+        
         # DETECT EXTERNAL MESSAGE CALLBACK FORMAT
-        if ('subscriber_id' in data or 'attachment_url' in data or 'message_text' in data):
+        elif ('subscriber_id' in data or 'attachment_url' in data or 'message_text' in data):
             app.logger.info("📨 Detected External Message Callback format from ManyChat")
             print("📨 Detected External Message Callback format from ManyChat")
             
@@ -1806,6 +1951,53 @@ def privacy_policy():
 @app.route('/terms-and-conditions')
 def terms_conditions():
     return render_template('terms_conditions.html')
+
+# Add new function for Telegram Bot API integration
+def download_telegram_image(file_id, telegram_bot_token):
+    """Download image from Telegram using file_id"""
+    try:
+        app.logger.info(f"📥 Downloading Telegram image with file_id: {file_id}")
+        
+        # Step 1: Get file info from Telegram
+        get_file_url = f"https://api.telegram.org/bot{telegram_bot_token}/getFile"
+        params = {'file_id': file_id}
+        
+        response = requests.get(get_file_url, params=params, timeout=30)
+        if response.status_code != 200:
+            app.logger.error(f"Failed to get file info from Telegram: {response.status_code}")
+            return None
+            
+        file_info = response.json()
+        if not file_info.get('ok'):
+            app.logger.error(f"Telegram API error: {file_info}")
+            return None
+            
+        file_path = file_info['result']['file_path']
+        app.logger.info(f"📁 Telegram file_path: {file_path}")
+        
+        # Step 2: Download the actual file
+        download_url = f"https://api.telegram.org/file/bot{telegram_bot_token}/{file_path}"
+        app.logger.info(f"🔗 Downloading from: {download_url}")
+        
+        image_response = requests.get(download_url, timeout=30)
+        if image_response.status_code != 200:
+            app.logger.error(f"Failed to download image: {image_response.status_code}")
+            return None
+            
+        # Step 3: Save to temporary file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"telegram_{file_id}_{timestamp}.jpg"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        with open(filepath, 'wb') as f:
+            f.write(image_response.content)
+            
+        app.logger.info(f"✅ Telegram image saved to: {filepath}")
+        return filepath
+        
+    except Exception as e:
+        app.logger.error(f"Error downloading Telegram image: {str(e)}")
+        return None
 
 if __name__ == '__main__':
     with app.app_context():

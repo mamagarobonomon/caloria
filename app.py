@@ -782,9 +782,65 @@ def manychat_webhook():
         # Check if this is Full Contact Data format
         if 'id' in data and 'key' in data and data.get('key', '').startswith('user:'):
             app.logger.info("📋 Detected Full Contact Data format from ManyChat")
+            
+            # COMPREHENSIVE DEBUG LOGGING FOR FULL CONTACT DATA
+            app.logger.info("🔍 FULL CONTACT DATA ANALYSIS:")
+            app.logger.info(f"All keys in Full Contact Data: {list(data.keys())}")
+            for key, value in data.items():
+                if key not in ['key', 'id', 'first_name', 'last_name', 'name']:  # Skip basic fields
+                    app.logger.info(f"  📝 {key}: {value} (type: {type(value)})")
+            
             contact_data = data
             subscriber_id = str(data.get('id'))
             app.logger.info(f"Subscriber ID from Full Contact Data: {subscriber_id}")
+            
+            # Check if this is just a profile update (no message content)
+            last_input_text = contact_data.get('last_input_text')
+            
+            # ENHANCED IMAGE DETECTION FOR FULL CONTACT DATA
+            has_image = False
+            image_fields_found = []
+            
+            # Check common image/attachment fields in Full Contact Data
+            image_field_names = [
+                'attachment', 'attachments', 'image_url', 'file_url', 'media_url', 
+                'photo_url', 'document_url', 'media', 'file', 'image', 'photo',
+                'last_input_type', 'content_type', 'message_type', 'input_type'
+            ]
+            
+            app.logger.info("🔍 Checking for image indicators in Full Contact Data...")
+            for field in image_field_names:
+                if field in contact_data:
+                    value = contact_data.get(field)
+                    app.logger.info(f"  Found field '{field}': {value}")
+                    
+                    # Check if field indicates image content
+                    if field in ['last_input_type', 'content_type', 'message_type', 'input_type']:
+                        if value and ('image' in str(value).lower() or 'photo' in str(value).lower() or 'file' in str(value).lower()):
+                            has_image = True
+                            image_fields_found.append(f"{field}={value}")
+                            app.logger.info(f"  ✅ DETECTED IMAGE from type field: {field}={value}")
+                    elif value and (isinstance(value, str) and ('http' in value or 'url' in value.lower())):
+                        has_image = True
+                        image_fields_found.append(f"{field}={value}")
+                        app.logger.info(f"  ✅ DETECTED IMAGE from URL field: {field}={value}")
+                    elif value and value != "":
+                        # Non-empty value in a potential image field
+                        has_image = True
+                        image_fields_found.append(f"{field}={value}")
+                        app.logger.info(f"  ✅ DETECTED IMAGE from non-empty field: {field}={value}")
+            
+            # Also check for custom fields that might contain image data
+            custom_fields = contact_data.get('custom_fields', {})
+            if custom_fields:
+                app.logger.info(f"🔍 Checking custom_fields: {custom_fields}")
+                for field, value in custom_fields.items():
+                    if value and ('http' in str(value) or 'image' in str(field).lower() or 'photo' in str(field).lower()):
+                        has_image = True
+                        image_fields_found.append(f"custom_fields.{field}={value}")
+                        app.logger.info(f"  ✅ DETECTED IMAGE from custom field: {field}={value}")
+            
+            app.logger.info(f"📊 Image detection result: has_image={has_image}, fields={image_fields_found}")
             
             # Get or create user first with the subscriber_id we have
             user = User.query.filter_by(whatsapp_id=subscriber_id).first()
@@ -817,8 +873,16 @@ def manychat_webhook():
                     }
                 })
             
+            # HANDLE IMAGE UPLOADS IN FULL CONTACT DATA
+            if has_image:
+                app.logger.info("🖼️ Processing image from Full Contact Data")
+                # Route directly to image handler
+                normalized_data = contact_data.copy()
+                normalized_data['platform'] = 'telegram'
+                normalized_data['text'] = last_input_text or ''  # Optional description
+                return handle_image_input(user, normalized_data)
+            
             # Check if this is just a profile update (no message content)
-            last_input_text = contact_data.get('last_input_text')
             if last_input_text is None or last_input_text == "":
                 app.logger.info("ℹ️ Full Contact Data has no current message content")
                 
@@ -855,7 +919,7 @@ def manychat_webhook():
                     })
             
             # If we have message content in Full Contact Data, process it
-            app.logger.info(f"Processing Full Contact Data with message: '{last_input_text}'")
+            app.logger.info(f"Processing Full Contact Data with text message: '{last_input_text}'")
             
         else:
             # Legacy format - extract subscriber_id from various possible fields

@@ -775,12 +775,26 @@ def manychat_webhook():
         data = request.get_json()
         app.logger.info(f"Received ManyChat webhook: {data}")
         
-        # DEBUG: Log all the keys to see what ManyChat actually sends
-        app.logger.info(f"Webhook data keys: {list(data.keys())}")
-        if 'attachments' in data:
-            app.logger.info(f"Attachments found: {data['attachments']}")
-        if 'attachment' in data:
-            app.logger.info(f"Attachment found: {data['attachment']}")
+        # COMPREHENSIVE DEBUG LOGGING for troubleshooting
+        app.logger.info(f"=== ManyChat Webhook Debug Info ===")
+        app.logger.info(f"Raw JSON keys: {list(data.keys())}")
+        app.logger.info(f"Content type field: {data.get('type', 'NOT_SET')}")
+        app.logger.info(f"Has text: {bool(data.get('text'))}")
+        app.logger.info(f"Text content: {data.get('text', 'NO_TEXT')}")
+        
+        # Check for various attachment fields that ManyChat might use
+        attachment_fields = [
+            'attachments', 'attachment', 'image_url', 'url', 'attachment_url',
+            'media', 'media_url', 'file_url', 'photo', 'photo_url', 'image',
+            'file', 'files', 'document', 'document_url'
+        ]
+        
+        for field in attachment_fields:
+            if field in data:
+                app.logger.info(f"Found attachment field '{field}': {data[field]}")
+        
+        # Log the complete data structure for debugging
+        app.logger.info(f"Complete webhook data: {json.dumps(data, indent=2)}")
         
         # Extract user information
         subscriber_id = data.get('subscriber_id')
@@ -794,35 +808,100 @@ def manychat_webhook():
             db.session.add(user)
             db.session.commit()
         
-        # Handle different types of content
+        # ENHANCED IMAGE DETECTION - Check multiple possible formats
+        has_image = False
+        image_fields_found = []
+        
+        # Check for direct image URL fields
+        direct_url_fields = ['image_url', 'url', 'attachment_url', 'media_url', 'photo_url', 'file_url', 'document_url']
+        for field in direct_url_fields:
+            if data.get(field):
+                has_image = True
+                image_fields_found.append(field)
+                app.logger.info(f"Found direct image URL in field: {field}")
+        
+        # Check attachments array
+        if data.get('attachments'):
+            attachments = data.get('attachments')
+            if isinstance(attachments, list) and len(attachments) > 0:
+                has_image = True
+                image_fields_found.append('attachments')
+                app.logger.info(f"Found attachments array with {len(attachments)} items")
+                
+                # Log details of each attachment
+                for i, attachment in enumerate(attachments):
+                    app.logger.info(f"Attachment {i}: {attachment}")
+            elif isinstance(attachments, dict):
+                has_image = True
+                image_fields_found.append('attachments')
+                app.logger.info(f"Found attachments object: {attachments}")
+        
+        # Check single attachment object
+        if data.get('attachment'):
+            has_image = True
+            image_fields_found.append('attachment')
+            app.logger.info(f"Found single attachment: {data.get('attachment')}")
+        
+        # Check for other media fields
+        media_fields = ['media', 'photo', 'image', 'file', 'files', 'document']
+        for field in media_fields:
+            if data.get(field):
+                has_image = True
+                image_fields_found.append(field)
+                app.logger.info(f"Found media in field: {field}")
+        
+        # Determine content type with enhanced logic
         content_type = data.get('type', 'text')  # Default to 'text' if missing
+        
+        # If we detected any image-related fields, override content type
+        if has_image:
+            content_type = 'image'
+            app.logger.info(f"🖼️ DETECTED IMAGE CONTENT from fields: {image_fields_found}")
         
         # If type is empty string or None, default to text if we have text content
         if not content_type and data.get('text'):
             content_type = 'text'
         
-        # Check for attachments (images/files) even if type isn't explicitly 'image'
-        if data.get('attachments') or data.get('image_url') or data.get('attachment'):
-            content_type = 'image'
-            app.logger.info(f"Detected image content, switching to image handler")
+        app.logger.info(f"Final determined content_type: {content_type}")
         
+        # Route to appropriate handler
         if content_type == 'text':
+            app.logger.info("Routing to text handler")
             return handle_text_input(user, data)
         elif content_type == 'image':
+            app.logger.info("Routing to image handler")
             return handle_image_input(user, data)
         elif content_type == 'audio':
+            app.logger.info("Routing to audio handler")
             return handle_audio_input(user, data)
         elif content_type == 'quiz_response':
+            app.logger.info("Routing to quiz handler")
             return handle_quiz_response(user, data)
         else:
-            # If we have text but unrecognized type, treat as text
+            # Enhanced fallback - if we have text but unrecognized type, treat as text
             if data.get('text'):
+                app.logger.info("Unrecognized type but has text, routing to text handler")
                 return handle_text_input(user, data)
-            return jsonify({'message': 'Content type not supported'}), 400
+            
+            # Log detailed error for debugging
+            app.logger.error(f"❌ UNSUPPORTED CONTENT TYPE: {content_type}")
+            app.logger.error(f"Available data keys: {list(data.keys())}")
+            app.logger.error(f"Full data for debugging: {json.dumps(data, indent=2)}")
+            
+            return jsonify({
+                'message': f'Content type not supported: {content_type}',
+                'debug_info': {
+                    'received_type': content_type,
+                    'available_fields': list(data.keys()),
+                    'has_text': bool(data.get('text')),
+                    'image_fields_found': image_fields_found
+                }
+            }), 400
             
     except Exception as e:
-        app.logger.error(f"Webhook error: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+        app.logger.error(f"❌ WEBHOOK ERROR: {str(e)}")
+        app.logger.error(f"Request data: {request.get_data()}")
+        return jsonify({'error': f'Webhook processing failed: {str(e)}'}), 500
 
 def handle_text_input(user, data):
     """Handle text input from user"""
@@ -875,36 +954,114 @@ def handle_text_input(user, data):
 
 def handle_image_input(user, data):
     """Handle image input from user"""
-    # Try multiple possible fields for image URL
+    # ENHANCED IMAGE URL EXTRACTION - Try multiple possible fields
     image_url = None
+    url_source = None
     
-    # Check different possible field names for image URL
-    possible_fields = ['image_url', 'url', 'attachment_url']
-    for field in possible_fields:
+    app.logger.info("🔍 Searching for image URL in webhook data...")
+    
+    # Check direct URL fields first
+    direct_url_fields = [
+        'image_url', 'url', 'attachment_url', 'media_url', 
+        'photo_url', 'file_url', 'document_url'
+    ]
+    
+    for field in direct_url_fields:
         if data.get(field):
             image_url = data.get(field)
+            url_source = field
+            app.logger.info(f"✅ Found image URL in '{field}': {image_url}")
             break
     
     # Check attachments array
     if not image_url and data.get('attachments'):
         attachments = data.get('attachments')
+        app.logger.info(f"🔍 Checking attachments: {attachments}")
+        
         if isinstance(attachments, list) and len(attachments) > 0:
             # Get first attachment
             attachment = attachments[0]
+            app.logger.info(f"📎 Processing attachment[0]: {attachment}")
+            
             if isinstance(attachment, dict):
-                image_url = attachment.get('url') or attachment.get('image_url')
+                # Try various URL field names in the attachment
+                url_fields = ['url', 'image_url', 'file_url', 'media_url', 'photo_url', 'src', 'href', 'link']
+                for url_field in url_fields:
+                    if attachment.get(url_field):
+                        image_url = attachment.get(url_field)
+                        url_source = f'attachments[0].{url_field}'
+                        app.logger.info(f"✅ Found image URL in attachment: {url_source} = {image_url}")
+                        break
+            elif isinstance(attachment, str):
+                # Direct URL in attachment
+                image_url = attachment
+                url_source = 'attachments[0]'
+                app.logger.info(f"✅ Found direct URL in attachments[0]: {image_url}")
+        
+        elif isinstance(attachments, dict):
+            # Single attachment object
+            url_fields = ['url', 'image_url', 'file_url', 'media_url', 'photo_url', 'src', 'href', 'link']
+            for url_field in url_fields:
+                if attachments.get(url_field):
+                    image_url = attachments.get(url_field)
+                    url_source = f'attachments.{url_field}'
+                    app.logger.info(f"✅ Found image URL in attachments object: {url_source} = {image_url}")
+                    break
     
     # Check single attachment object
     if not image_url and data.get('attachment'):
         attachment = data.get('attachment')
+        app.logger.info(f"🔍 Checking single attachment: {attachment}")
+        
         if isinstance(attachment, dict):
-            image_url = attachment.get('url') or attachment.get('image_url')
+            url_fields = ['url', 'image_url', 'file_url', 'media_url', 'photo_url', 'src', 'href', 'link']
+            for url_field in url_fields:
+                if attachment.get(url_field):
+                    image_url = attachment.get(url_field)
+                    url_source = f'attachment.{url_field}'
+                    app.logger.info(f"✅ Found image URL in attachment: {url_source} = {image_url}")
+                    break
+        elif isinstance(attachment, str):
+            image_url = attachment
+            url_source = 'attachment'
+            app.logger.info(f"✅ Found direct URL in attachment: {image_url}")
     
-    app.logger.info(f"Extracted image_url: {image_url}")
+    # Check other media fields
+    if not image_url:
+        media_fields = ['media', 'photo', 'image', 'file', 'files', 'document']
+        for field in media_fields:
+            if data.get(field):
+                media_data = data.get(field)
+                app.logger.info(f"🔍 Checking media field '{field}': {media_data}")
+                
+                if isinstance(media_data, str):
+                    image_url = media_data
+                    url_source = field
+                    app.logger.info(f"✅ Found image URL in '{field}': {image_url}")
+                    break
+                elif isinstance(media_data, dict):
+                    url_fields = ['url', 'image_url', 'file_url', 'media_url', 'src', 'href', 'link']
+                    for url_field in url_fields:
+                        if media_data.get(url_field):
+                            image_url = media_data.get(url_field)
+                            url_source = f'{field}.{url_field}'
+                            app.logger.info(f"✅ Found image URL in '{field}.{url_field}': {image_url}")
+                            break
+                    if image_url:
+                        break
+    
+    # Final logging
+    if image_url:
+        app.logger.info(f"🎯 FINAL IMAGE URL: {image_url} (from: {url_source})")
+    else:
+        app.logger.error(f"❌ NO IMAGE URL FOUND")
+        app.logger.error(f"Available fields: {list(data.keys())}")
+        app.logger.error(f"Complete webhook data: {json.dumps(data, indent=2)}")
+    
     user_text = data.get('text', '')  # Optional description
     
     if not image_url:
-        app.logger.error(f"No image URL found in data: {data}")
+        app.logger.error(f"No image URL found in webhook data")
         return jsonify({
             "version": "v2",
             "content": {
@@ -912,13 +1069,15 @@ def handle_image_input(user, data):
                 "messages": [
                     {
                         "type": "text",
-                        "text": "❌ No image received. Please send a photo of your food!"
+                        "text": "❌ No image received. Please send a photo of your food!\n\n🔧 Debug: Image URL not found in webhook data."
                     }
                 ]
             }
         }), 400
     
     try:
+        app.logger.info(f"📥 Downloading image from: {image_url}")
+        
         # Download and save image
         response = requests.get(image_url, timeout=30)
         if response.status_code == 200:
@@ -930,6 +1089,8 @@ def handle_image_input(user, data):
             # Save image
             with open(filepath, 'wb') as f:
                 f.write(response.content)
+            
+            app.logger.info(f"💾 Image saved to: {filepath}")
             
             # Analyze image
             analysis_result = FoodAnalysisService.analyze_food_image(filepath, user_text)
@@ -973,6 +1134,8 @@ def handle_image_input(user, data):
             # Get platform from request data, default to telegram
             platform = data.get('platform', 'telegram')
             
+            app.logger.info(f"✅ Image analysis completed successfully")
+            
             # Return ManyChat dynamic block format
             return jsonify({
                 "version": "v2",
@@ -987,6 +1150,7 @@ def handle_image_input(user, data):
                 }
             })
         else:
+            app.logger.error(f"Failed to download image: HTTP {response.status_code}")
             return jsonify({
                 "version": "v2",
                 "content": {
@@ -994,7 +1158,7 @@ def handle_image_input(user, data):
                     "messages": [
                         {
                             "type": "text",
-                            "text": "❌ Could not download your image. Please try again!"
+                            "text": f"❌ Could not download your image (HTTP {response.status_code}). Please try again!"
                         }
                     ]
                 }
@@ -1009,7 +1173,7 @@ def handle_image_input(user, data):
                 "messages": [
                     {
                         "type": "text",
-                        "text": "❌ Error processing your image. Please try again!"
+                        "text": f"❌ Error processing your image: {str(e)}. Please try again!"
                     }
                 ]
             }

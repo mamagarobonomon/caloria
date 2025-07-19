@@ -782,17 +782,22 @@ def manychat_webhook():
         # Check if this is Full Contact Data format
         if 'id' in data and 'key' in data and data.get('key', '').startswith('user:'):
             app.logger.info("📋 Detected Full Contact Data format from ManyChat")
+            print("📋 Detected Full Contact Data format from ManyChat")
             
             # COMPREHENSIVE DEBUG LOGGING FOR FULL CONTACT DATA
             app.logger.info("🔍 FULL CONTACT DATA ANALYSIS:")
+            print("🔍 FULL CONTACT DATA ANALYSIS:")
             app.logger.info(f"All keys in Full Contact Data: {list(data.keys())}")
+            print(f"All keys in Full Contact Data: {list(data.keys())}")
             for key, value in data.items():
                 if key not in ['key', 'id', 'first_name', 'last_name', 'name']:  # Skip basic fields
                     app.logger.info(f"  📝 {key}: {value} (type: {type(value)})")
+                    print(f"  📝 {key}: {value} (type: {type(value)})")
             
             contact_data = data
             subscriber_id = str(data.get('id'))
             app.logger.info(f"Subscriber ID from Full Contact Data: {subscriber_id}")
+            print(f"Subscriber ID from Full Contact Data: {subscriber_id}")
             
             # Check if this is just a profile update (no message content)
             last_input_text = contact_data.get('last_input_text')
@@ -809,10 +814,12 @@ def manychat_webhook():
             ]
             
             app.logger.info("🔍 Checking for image indicators in Full Contact Data...")
+            print("🔍 Checking for image indicators in Full Contact Data...")
             for field in image_field_names:
                 if field in contact_data:
                     value = contact_data.get(field)
                     app.logger.info(f"  Found field '{field}': {value}")
+                    print(f"  Found field '{field}': {value}")
                     
                     # Check if field indicates image content
                     if field in ['last_input_type', 'content_type', 'message_type', 'input_type']:
@@ -820,27 +827,33 @@ def manychat_webhook():
                             has_image = True
                             image_fields_found.append(f"{field}={value}")
                             app.logger.info(f"  ✅ DETECTED IMAGE from type field: {field}={value}")
+                            print(f"  ✅ DETECTED IMAGE from type field: {field}={value}")
                     elif value and (isinstance(value, str) and ('http' in value or 'url' in value.lower())):
                         has_image = True
                         image_fields_found.append(f"{field}={value}")
                         app.logger.info(f"  ✅ DETECTED IMAGE from URL field: {field}={value}")
+                        print(f"  ✅ DETECTED IMAGE from URL field: {field}={value}")
                     elif value and value != "":
                         # Non-empty value in a potential image field
                         has_image = True
                         image_fields_found.append(f"{field}={value}")
                         app.logger.info(f"  ✅ DETECTED IMAGE from non-empty field: {field}={value}")
+                        print(f"  ✅ DETECTED IMAGE from non-empty field: {field}={value}")
             
             # Also check for custom fields that might contain image data
             custom_fields = contact_data.get('custom_fields', {})
             if custom_fields:
                 app.logger.info(f"🔍 Checking custom_fields: {custom_fields}")
+                print(f"🔍 Checking custom_fields: {custom_fields}")
                 for field, value in custom_fields.items():
                     if value and ('http' in str(value) or 'image' in str(field).lower() or 'photo' in str(field).lower()):
                         has_image = True
                         image_fields_found.append(f"custom_fields.{field}={value}")
                         app.logger.info(f"  ✅ DETECTED IMAGE from custom field: {field}={value}")
+                        print(f"  ✅ DETECTED IMAGE from custom field: {field}={value}")
             
             app.logger.info(f"📊 Image detection result: has_image={has_image}, fields={image_fields_found}")
+            print(f"📊 Image detection result: has_image={has_image}, fields={image_fields_found}")
             
             # Get or create user first with the subscriber_id we have
             user = User.query.filter_by(whatsapp_id=subscriber_id).first()

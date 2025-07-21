@@ -10,12 +10,21 @@ import json
 import requests
 import logging
 from PIL import Image
-# import speech_recognition as sr  # Temporarily disabled for Python 3.13 compatibility
 import io
 import base64
 import hashlib
 import tempfile
 from urllib.parse import urlparse
+
+# Google Cloud imports
+try:
+    from google.cloud import vision
+    from google.cloud import speech
+    from google.oauth2 import service_account
+    GOOGLE_CLOUD_AVAILABLE = True
+except ImportError:
+    GOOGLE_CLOUD_AVAILABLE = False
+    # Note: app.logger will be available after Flask app is created
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'caloria-secret-key-change-in-production')
@@ -33,6 +42,10 @@ app.config['TELEGRAM_BOT_TOKEN'] = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 db = SQLAlchemy(app)
 CORS(app)
+
+# Log Google Cloud availability
+if not GOOGLE_CLOUD_AVAILABLE:
+    print("⚠️ Google Cloud libraries not available. Install with: pip install google-cloud-vision google-cloud-speech")
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -158,13 +171,143 @@ class AdminUser(db.Model):
 # Food Analysis Services
 class FoodAnalysisService:
     @staticmethod
+    def _get_google_cloud_credentials():
+        """Get Google Cloud credentials from environment"""
+        try:
+            # Try to get credentials from GOOGLE_APPLICATION_CREDENTIALS file
+            credentials_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+            if credentials_path and os.path.exists(credentials_path):
+                return service_account.Credentials.from_service_account_file(credentials_path)
+            
+            # Try to get from GOOGLE_CLOUD_KEY_JSON environment variable
+            key_json = os.environ.get('GOOGLE_CLOUD_KEY_JSON')
+            if key_json:
+                import json
+                key_data = json.loads(key_json)
+                return service_account.Credentials.from_service_account_info(key_data)
+            
+            # Fall back to default credentials (when running on Google Cloud)
+            from google.auth import default
+            credentials, project = default()
+            return credentials
+            
+        except Exception as e:
+            app.logger.error(f"Error getting Google Cloud credentials: {str(e)}")
+            return None
+
+    @staticmethod
     def analyze_food_image(image_path, user_description=None):
-        """Analyze food from image using Spoonacular API with enhanced processing"""
+        """Analyze food from image using Google Cloud Vision API as primary, Spoonacular as fallback"""
+        try:
+            app.logger.info("🔍 Starting Google Cloud Vision API food analysis")
+            
+            # First try Google Cloud Vision API
+            if GOOGLE_CLOUD_AVAILABLE:
+                vision_result = FoodAnalysisService._analyze_image_with_google_vision(image_path, user_description)
+                if vision_result and vision_result.get('confidence_score', 0) > 0.3:
+                    app.logger.info("✅ Google Cloud Vision analysis successful")
+                    return vision_result
+                else:
+                    app.logger.warning("⚠️ Google Cloud Vision analysis low confidence, trying Spoonacular fallback")
+            
+            # Fallback to Spoonacular API
+            app.logger.info("🔄 Falling back to Spoonacular API")
+            spoonacular_result = FoodAnalysisService._analyze_image_with_spoonacular(image_path, user_description)
+            if spoonacular_result and spoonacular_result.get('confidence_score', 0) > 0.3:
+                app.logger.info("✅ Spoonacular fallback successful")
+                return spoonacular_result
+            
+            # Final fallback to enhanced image analysis
+            app.logger.warning("⚠️ All APIs failed, using enhanced fallback")
+            return FoodAnalysisService._enhanced_image_fallback(image_path, user_description)
+                
+        except Exception as e:
+            app.logger.error(f"Image analysis error: {str(e)}")
+            return FoodAnalysisService._fallback_analysis("Image analysis", user_description)
+
+    @staticmethod
+    def _analyze_image_with_google_vision(image_path, user_description=None):
+        """Analyze image using Google Cloud Vision API"""
+        try:
+            credentials = FoodAnalysisService._get_google_cloud_credentials()
+            if not credentials:
+                app.logger.warning("No Google Cloud credentials available")
+                return None
+                
+            # Initialize Vision API client
+            client = vision.ImageAnnotatorClient(credentials=credentials)
+            
+            # Read image file
+            with open(image_path, 'rb') as image_file:
+                content = image_file.read()
+            
+            image = vision.Image(content=content)
+            
+            # Perform label detection
+            response = client.label_detection(image=image)
+            labels = response.label_annotations
+            
+            # Perform object localization (better for food items)
+            objects = client.object_localization(image=image).localized_object_annotations
+            
+            # Process results to find food items
+            food_items = []
+            confidence_scores = []
+            
+            # Check object detection results first (more specific)
+            for obj in objects:
+                name = obj.name.lower()
+                score = obj.score
+                if any(food_word in name for food_word in ['food', 'fruit', 'vegetable', 'meat', 'dish', 'drink', 'beverage']):
+                    food_items.append(name)
+                    confidence_scores.append(score)
+                    app.logger.info(f"📍 Object detected: {name} (confidence: {score:.2f})")
+            
+            # Check label detection results
+            for label in labels:
+                name = label.description.lower()
+                score = label.score
+                if any(food_word in name for food_word in ['food', 'fruit', 'vegetable', 'meat', 'dish', 'cuisine', 'ingredient', 'produce', 'snack', 'meal']):
+                    food_items.append(name)
+                    confidence_scores.append(score)
+                    app.logger.info(f"🏷️ Label detected: {name} (confidence: {score:.2f})")
+            
+            if not food_items:
+                app.logger.warning("No food items detected by Google Vision")
+                return None
+            
+            # Use the highest confidence food item
+            best_idx = confidence_scores.index(max(confidence_scores))
+            detected_food = food_items[best_idx]
+            confidence = confidence_scores[best_idx]
+            
+            # Use user description if provided, otherwise use detected food
+            food_name = user_description if user_description and user_description.strip() else detected_food
+            
+            app.logger.info(f"🎯 Best food detection: {detected_food} -> using: {food_name}")
+            
+            # Get nutritional data from Spoonacular
+            nutrition_data = FoodAnalysisService._get_nutrition_from_spoonacular(food_name)
+            if nutrition_data:
+                nutrition_data['confidence_score'] = min(confidence + 0.1, 0.9)  # Boost confidence slightly
+                nutrition_data['food_name'] = food_name
+                return nutrition_data
+            else:
+                # Generate estimated nutrition if Spoonacular fails
+                return FoodAnalysisService._generate_nutrition_estimate(food_name, confidence)
+                
+        except Exception as e:
+            app.logger.error(f"Google Cloud Vision error: {str(e)}")
+            return None
+
+    @staticmethod
+    def _analyze_image_with_spoonacular(image_path, user_description=None):
+        """Analyze image using Spoonacular API (fallback)"""
         try:
             api_key = app.config['SPOONACULAR_API_KEY']
             if not api_key:
                 app.logger.warning("No Spoonacular API key configured")
-                return FoodAnalysisService._fallback_analysis("Image analysis", user_description)
+                return None
             
             # Enhanced image preprocessing for better recognition
             processed_image_path = FoodAnalysisService._preprocess_image(image_path)
@@ -212,20 +355,89 @@ class FoodAnalysisService:
                     app.logger.error(f"Network error with {endpoint}: {str(e)}")
                     continue
             
-            # If all endpoints fail, use enhanced fallback with image analysis
-            app.logger.warning("All Spoonacular endpoints failed, using enhanced fallback")
-            fallback_result = FoodAnalysisService._enhanced_image_fallback(image_path, user_description)
-            
             # Clean up processed image
-            if processed_image_path != image_path:
+            if processed_image_path != image_path and os.path.exists(processed_image_path):
                 os.remove(processed_image_path)
-            
-            return fallback_result
+                
+            return None
                 
         except Exception as e:
-            app.logger.error(f"Image analysis error: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("Image analysis", user_description)
-    
+            app.logger.error(f"Spoonacular analysis error: {str(e)}")
+            return None
+
+    @staticmethod
+    def _get_nutrition_from_spoonacular(food_name):
+        """Get nutritional data from Spoonacular for identified food"""
+        try:
+            api_key = app.config['SPOONACULAR_API_KEY']
+            if not api_key:
+                return None
+                
+            # Use Spoonacular's recipe/ingredient parsing for nutrition
+            url = f"https://api.spoonacular.com/recipes/parseIngredients"
+            params = {
+                "ingredientList": food_name,
+                "servings": 1,
+                "includeNutrition": True,
+                "apiKey": api_key
+            }
+            
+            response = requests.post(url, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                results = response.json()
+                if results and len(results) > 0:
+                    return FoodAnalysisService._process_ingredient_response(results[0], food_name)
+            
+            return None
+            
+        except Exception as e:
+            app.logger.error(f"Spoonacular nutrition lookup error: {str(e)}")
+            return None
+
+    @staticmethod
+    def _generate_nutrition_estimate(food_name, confidence):
+        """Generate estimated nutrition when APIs fail"""
+        # Enhanced keyword-based estimation
+        food_lower = food_name.lower()
+        
+        # More comprehensive calorie estimates
+        calorie_estimates = {
+            'apple': 80, 'banana': 105, 'orange': 60, 'strawberry': 32, 'strawberries': 32,
+            'grape': 60, 'grapes': 60, 'cherry': 50, 'cherries': 50, 'peach': 60, 'pear': 85,
+            'pineapple': 50, 'watermelon': 30, 'cantaloupe': 35, 'honeydew': 36,
+            'broccoli': 25, 'carrot': 25, 'spinach': 20, 'lettuce': 15, 'tomato': 20,
+            'cucumber': 15, 'bell pepper': 25, 'onion': 40, 'garlic': 150, 'potato': 160,
+            'sweet potato': 100, 'corn': 90, 'green beans': 35, 'peas': 80,
+            'chicken': 250, 'beef': 300, 'pork': 280, 'fish': 200, 'salmon': 220,
+            'tuna': 130, 'shrimp': 100, 'turkey': 200, 'bacon': 540, 'ham': 145,
+            'egg': 70, 'cheese': 100, 'milk': 60, 'yogurt': 100, 'butter': 720,
+            'bread': 80, 'rice': 200, 'pasta': 200, 'pizza': 300, 'burger': 500,
+            'sandwich': 350, 'salad': 150, 'soup': 200, 'cookie': 150, 'cake': 350,
+            'nuts': 200, 'almonds': 580, 'peanuts': 560, 'cashews': 550,
+            'avocado': 160, 'olive oil': 880, 'coconut': 350
+        }
+        
+        estimated_calories = 100  # default
+        
+        # Find best match
+        for keyword, calories in calorie_estimates.items():
+            if keyword in food_lower:
+                estimated_calories = calories
+                break
+        
+        return {
+            'food_name': food_name,
+            'calories': estimated_calories,
+            'protein': estimated_calories * 0.15 / 4,  # 15% of calories from protein
+            'carbs': estimated_calories * 0.55 / 4,    # 55% from carbs
+            'fat': estimated_calories * 0.30 / 9,      # 30% from fat
+            'fiber': 3,
+            'sodium': 400,
+            'confidence_score': max(confidence, 0.4),  # Minimum confidence
+            'food_score': 3
+        }
+
     @staticmethod
     def analyze_food_text(text_description):
         """Analyze food from text description using Spoonacular API"""
@@ -258,23 +470,86 @@ class FoodAnalysisService:
     
     @staticmethod
     def analyze_food_voice(audio_file_path):
-        """Analyze food from voice using speech-to-text then text analysis"""
+        """Analyze food from voice using Google Cloud Speech-to-Text then text analysis"""
         try:
-            # Convert speech to text - temporarily disabled for Python 3.13
-            # r = sr.Recognizer()
-            # with sr.AudioFile(audio_file_path) as source:
-            #     audio = r.record(source)
-            #     text = r.recognize_google(audio)
-            text = "Voice recognition temporarily disabled"
+            app.logger.info("🎤 Starting Google Cloud Speech-to-Text analysis")
             
-            app.logger.info(f"Voice transcription: {text}")
+            # Try Google Cloud Speech-to-Text first
+            if GOOGLE_CLOUD_AVAILABLE:
+                transcribed_text = FoodAnalysisService._transcribe_audio_with_google(audio_file_path)
+                if transcribed_text:
+                    app.logger.info(f"✅ Google Speech transcription: '{transcribed_text}'")
+                    # Analyze the transcribed text
+                    return FoodAnalysisService.analyze_food_text(transcribed_text)
             
-            # Analyze the transcribed text
-            return FoodAnalysisService.analyze_food_text(text)
+            # Fallback to basic response
+            app.logger.warning("⚠️ Google Cloud Speech not available")
+            return FoodAnalysisService._fallback_analysis("Voice analysis", "voice message - please describe your food in text")
             
         except Exception as e:
             app.logger.error(f"Voice analysis error: {str(e)}")
             return FoodAnalysisService._fallback_analysis("Voice analysis", "audio file")
+
+    @staticmethod
+    def _transcribe_audio_with_google(audio_file_path):
+        """Transcribe audio using Google Cloud Speech-to-Text"""
+        try:
+            credentials = FoodAnalysisService._get_google_cloud_credentials()
+            if not credentials:
+                app.logger.warning("No Google Cloud credentials available for speech")
+                return None
+                
+            # Initialize Speech client
+            client = speech.SpeechClient(credentials=credentials)
+            
+            # Read audio file
+            with open(audio_file_path, 'rb') as audio_file:
+                content = audio_file.read()
+            
+            # Configure recognition
+            audio = speech.RecognitionAudio(content=content)
+            config = speech.RecognitionConfig(
+                encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,  # Try different encodings
+                sample_rate_hertz=16000,
+                language_code="en-US",
+                alternative_language_codes=["en-GB", "es-ES", "fr-FR"],  # Multi-language support
+                enable_automatic_punctuation=True,
+                enable_word_confidence=True,
+                model="latest_long"  # Best model for general use
+            )
+            
+            # Perform recognition
+            response = client.recognize(config=config, audio=audio)
+            
+            # Process results
+            for result in response.results:
+                if result.alternatives:
+                    transcript = result.alternatives[0].transcript
+                    confidence = result.alternatives[0].confidence
+                    app.logger.info(f"🎯 Speech recognition: '{transcript}' (confidence: {confidence:.2f})")
+                    return transcript
+            
+            app.logger.warning("No speech recognized by Google Cloud")
+            return None
+            
+        except Exception as e:
+            app.logger.error(f"Google Cloud Speech error: {str(e)}")
+            # Try with different audio encoding
+            try:
+                # Alternative encoding attempt
+                config = speech.RecognitionConfig(
+                    encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+                    sample_rate_hertz=44100,
+                    language_code="en-US"
+                )
+                response = client.recognize(config=config, audio=audio)
+                for result in response.results:
+                    if result.alternatives:
+                        return result.alternatives[0].transcript
+            except:
+                pass
+            
+            return None
     
     @staticmethod
     def _process_spoonacular_response(spoonacular_data, user_description=None):

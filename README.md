@@ -6,7 +6,8 @@ A comprehensive WhatsApp chatbot that helps users track their calorie intake and
 
 ### Core Functionality
 - **Multi-Modal Food Analysis**: Process photos, text descriptions, and voice messages
-- **AI-Powered Recognition**: Spoonacular API integration for accurate nutritional analysis
+- **AI-Powered Recognition**: Google Cloud Vision & Speech APIs for accurate food and voice recognition
+- **Nutritional Analysis**: Spoonacular API integration for detailed nutritional data
 - **Personalized Goals**: BMR calculation using Harris-Benedict formula
 - **Daily Summaries**: Automated daily statistics and recommendations
 - **ManyChat Integration**: Seamless WhatsApp conversation management
@@ -43,6 +44,7 @@ A comprehensive WhatsApp chatbot that helps users track their calorie intake and
 ### Prerequisites
 - Python 3.8+
 - PostgreSQL (optional, defaults to SQLite)
+- Google Cloud account with Vision & Speech APIs enabled
 - ManyChat account
 - Spoonacular API key
 
@@ -64,6 +66,7 @@ pip install -r requirements.txt
 export SECRET_KEY="your-secret-key-here"
 export SPOONACULAR_API_KEY="your-spoonacular-api-key"
 export MANYCHAT_API_TOKEN="your-manychat-api-token"
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/google-cloud-service-account.json"
 export DATABASE_URL="postgresql://user:password@localhost/caloria"  # Optional
 ```
 
@@ -84,11 +87,14 @@ python app.py
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `SECRET_KEY` | Flask session security key | Yes |
-| `SPOONACULAR_API_KEY` | Food analysis API key | Yes |
+| `SPOONACULAR_API_KEY` | Nutritional data API key | Yes |
 | `MANYCHAT_API_TOKEN` | WhatsApp integration token | Yes |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to Google Cloud service account JSON | Yes |
+| `GOOGLE_CLOUD_KEY_JSON` | Google Cloud service account JSON (alternative) | Yes* |
 | `DATABASE_URL` | PostgreSQL connection string | No |
 | `OPENAI_API_KEY` | OpenAI API for enhanced analysis | No |
-| `GOOGLE_CLOUD_API_KEY` | Speech-to-text API key | No |
+
+*Either `GOOGLE_APPLICATION_CREDENTIALS` or `GOOGLE_CLOUD_KEY_JSON` is required for Google Cloud APIs.
 
 ### ManyChat Setup
 
@@ -99,13 +105,31 @@ python app.py
    - Food logging flow with follow-up questions
    - Daily summary message flow
 
-### Spoonacular API Setup
+### Google Cloud API Setup (Primary)
+
+1. **Create Google Cloud Project**: Visit console.cloud.google.com
+2. **Enable APIs**:
+   - Vision API (for food image recognition)
+   - Speech-to-Text API (for voice processing)
+3. **Create Service Account**:
+   - Go to IAM & Admin → Service Accounts
+   - Create new service account with Vision and Speech permissions
+   - Generate and download JSON key file
+4. **Configure Credentials**:
+   ```bash
+   # Option 1: Set path to JSON file
+   export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+   
+   # Option 2: Set JSON content directly
+   export GOOGLE_CLOUD_KEY_JSON='{"type":"service_account","project_id":"..."}'
+   ```
+
+### Spoonacular API Setup (Nutritional Data)
 
 1. **Get API Key**: Register at spoonacular.com/food-api
 2. **Configure Endpoints**: The system uses:
-   - Image analysis endpoint
-   - Ingredient parsing endpoint
-   - Nutrition data endpoint
+   - Ingredient parsing endpoint for nutritional data
+   - Recipe parsing for nutrition lookup
 
 ## 📱 WhatsApp Integration
 

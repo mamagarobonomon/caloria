@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Caloria - AI-Powered Nutrition Assistant for WhatsApp</title>
-    <meta name="description" content="Track calories, analyze food photos, and reach your health goals with Caloria's AI-powered WhatsApp bot. No app download required.">
+    <title data-en="Caloria - AI-Powered Nutrition Assistant for WhatsApp" data-es="Caloria - Asistente de Nutrición con IA para WhatsApp">Caloria - Asistente de Nutrición con IA para WhatsApp</title>
+    <meta name="description" data-en="Track calories, analyze food photos, and reach your health goals with Caloria's AI-powered WhatsApp bot. No app download required." data-es="Rastrea calorías, analiza fotos de comida y alcanza tus objetivos de salud con el bot de WhatsApp con IA de Caloria. No se requiere descargar app." content="Rastrea calorías, analiza fotos de comida y alcanza tus objetivos de salud con el bot de WhatsApp con IA de Caloria. No se requiere descargar app.">
     <meta name="facebook-domain-verification" content="yr0wc6qc32gl9pckcuqmiqgz90zc5f" />
     
     <!-- Bootstrap CSS -->
@@ -61,6 +61,30 @@
 
         .nav-link:hover {
             color: var(--primary-color) !important;
+        }
+
+        .language-switch {
+            background: var(--bg-light);
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            color: var(--text-dark);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            margin-left: 1rem;
+        }
+
+        .language-switch:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .language-switch.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
         }
 
         .hero-section {
@@ -363,6 +387,11 @@
             .cta-title {
                 font-size: 2rem;
             }
+
+            .language-switch {
+                margin-left: 0;
+                margin-top: 0.5rem;
+            }
         }
 
         .notification-badge {
@@ -391,16 +420,22 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="#features">Features</a>
+                        <a class="nav-link" href="#features" data-en="Features" data-es="Características">Características</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#how-it-works">How It Works</a>
+                        <a class="nav-link" href="#how-it-works" data-en="How It Works" data-es="Cómo Funciona">Cómo Funciona</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#privacy">Privacy</a>
+                        <a class="nav-link" href="#privacy" data-en="Privacy" data-es="Privacidad">Privacidad</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('admin_login') }}">Admin</a>
+                        <a class="nav-link" href="{{ url_for('admin_login') }}" data-en="Admin" data-es="Admin">Admin</a>
+                    </li>
+                    <li class="nav-item">
+                        <div class="d-flex">
+                            <a href="#" class="language-switch" data-lang="es" onclick="switchLanguage('es')">ES</a>
+                            <a href="#" class="language-switch" data-lang="en" onclick="switchLanguage('en')">EN</a>
+                        </div>
                     </li>
                 </ul>
             </div>
@@ -414,22 +449,22 @@
                 <div class="col-lg-6">
                     <div class="notification-badge">
                         <i class="fas fa-check-circle me-2"></i>
-                        AI-Powered • HIPAA Compliant • WhatsApp Native
+                        <span data-en="AI-Powered • HIPAA Compliant • WhatsApp Native" data-es="Con IA • Cumple HIPAA • Nativo de WhatsApp">Con IA • Cumple HIPAA • Nativo de WhatsApp</span>
                     </div>
-                    <h1 class="hero-title">
-                        Your Personal Nutrition Assistant in WhatsApp
+                    <h1 class="hero-title" data-en="Your Personal Nutrition Assistant in WhatsApp" data-es="Tu Asistente Personal de Nutrición en WhatsApp">
+                        Tu Asistente Personal de Nutrición en WhatsApp
                     </h1>
-                    <p class="hero-subtitle">
-                        Track calories, analyze food photos, and reach your health goals with AI-powered insights. No app download required – works directly in WhatsApp.
+                    <p class="hero-subtitle" data-en="Track calories, analyze food photos, and reach your health goals with AI-powered insights. No app download required – works directly in WhatsApp." data-es="Rastrea calorías, analiza fotos de comida y alcanza tus objetivos de salud con información impulsada por IA. No se requiere descargar aplicación – funciona directamente en WhatsApp.">
+                        Rastrea calorías, analiza fotos de comida y alcanza tus objetivos de salud con información impulsada por IA. No se requiere descargar aplicación – funciona directamente en WhatsApp.
                     </p>
                     <div class="d-flex flex-column flex-md-row">
                         <a href="#features" class="btn-primary-custom">
                             <i class="fas fa-rocket me-2"></i>
-                            Get Started Free
+                            <span data-en="Get Started Free" data-es="Comenzar Gratis">Comenzar Gratis</span>
                         </a>
                         <a href="#how-it-works" class="btn-secondary-custom">
                             <i class="fas fa-play me-2"></i>
-                            See How It Works
+                            <span data-en="See How It Works" data-es="Ver Cómo Funciona">Ver Cómo Funciona</span>
                         </a>
                     </div>
                 </div>
@@ -438,7 +473,7 @@
                         <div class="phone-screen">
                             <div class="d-flex align-items-center mb-3">
                                 <i class="fab fa-whatsapp me-2"></i>
-                                <strong>Caloria AI Assistant</strong>
+                                <strong data-en="Caloria AI Assistant" data-es="Asistente IA Caloria">Asistente IA Caloria</strong>
                                 <div class="ms-auto">
                                     <i class="fas fa-circle text-success" style="font-size: 0.5rem;"></i>
                                 </div>
@@ -446,30 +481,30 @@
                             
                             <div class="chat-message user">
                                 <i class="fas fa-camera me-2"></i>
-                                [Photo of grilled salmon with vegetables]
+                                <span data-en="[Photo of grilled salmon with vegetables]" data-es="[Foto de salmón a la parrilla con vegetales]">[Foto de salmón a la parrilla con vegetales]</span>
                             </div>
                             
                             <div class="chat-message">
-                                <strong>📊 Nutritional Analysis:</strong><br>
-                                🍽️ Grilled salmon with broccoli<br>
+                                <strong data-en="📊 Nutritional Analysis:" data-es="📊 Análisis Nutricional:">📊 Análisis Nutricional:</strong><br>
+                                <span data-en="🍽️ Grilled salmon with broccoli" data-es="🍽️ Salmón a la parrilla con brócoli">🍽️ Salmón a la parrilla con brócoli</span><br>
                                 🔥 <strong>425 kcal</strong><br>
-                                💪 Protein: 35g<br>
-                                🥗 Carbs: 12g<br>
-                                🥑 Fat: 18g<br><br>
-                                ⭐ <strong>Rating: 5/5</strong> - Excellent choice!<br>
-                                💡 Perfect balance of protein and omega-3s
+                                <span data-en="💪 Protein: 35g" data-es="💪 Proteína: 35g">💪 Proteína: 35g</span><br>
+                                <span data-en="🥗 Carbs: 12g" data-es="🥗 Carbohidratos: 12g">🥗 Carbohidratos: 12g</span><br>
+                                <span data-en="🥑 Fat: 18g" data-es="🥑 Grasas: 18g">🥑 Grasas: 18g</span><br><br>
+                                <span data-en="⭐ Rating: 5/5 - Excellent choice!" data-es="⭐ Calificación: 5/5 - ¡Excelente elección!">⭐ Calificación: 5/5 - ¡Excelente elección!</span><br>
+                                <span data-en="💡 Perfect balance of protein and omega-3s" data-es="💡 Equilibrio perfecto de proteína y omega-3">💡 Equilibrio perfecto de proteína y omega-3</span>
                             </div>
                             
                             <div class="chat-message user">
-                                🎤 "I had oatmeal for breakfast"
+                                <span data-en="🎤 \"I had oatmeal for breakfast\"" data-es="🎤 \"Desayuné avena\"">🎤 "Desayuné avena"</span>
                             </div>
                             
                             <div class="chat-message">
-                                Great! Oatmeal is rich in fiber.<br>
-                                📈 <strong>Today's Progress:</strong><br>
-                                🎯 Goal: 2000 kcal<br>
-                                📊 Consumed: 680 kcal<br>
-                                ⚡ Remaining: 1320 kcal
+                                <span data-en="Great! Oatmeal is rich in fiber." data-es="¡Genial! La avena es rica en fibra.">¡Genial! La avena es rica en fibra.</span><br>
+                                <strong data-en="📈 Today's Progress:" data-es="📈 Progreso de Hoy:">📈 Progreso de Hoy:</strong><br>
+                                <span data-en="🎯 Goal: 2000 kcal" data-es="🎯 Meta: 2000 kcal">🎯 Meta: 2000 kcal</span><br>
+                                <span data-en="📊 Consumed: 680 kcal" data-es="📊 Consumido: 680 kcal">📊 Consumido: 680 kcal</span><br>
+                                <span data-en="⚡ Remaining: 1320 kcal" data-es="⚡ Restante: 1320 kcal">⚡ Restante: 1320 kcal</span>
                             </div>
                         </div>
                     </div>
@@ -487,8 +522,8 @@
                         <div class="trust-icon">
                             <i class="fas fa-shield-alt"></i>
                         </div>
-                        <strong>HIPAA Compliant</strong><br>
-                        <small class="text-muted">Your data is secure</small>
+                        <strong data-en="HIPAA Compliant" data-es="Cumple HIPAA">Cumple HIPAA</strong><br>
+                        <small class="text-muted" data-en="Your data is secure" data-es="Tus datos están seguros">Tus datos están seguros</small>
                     </div>
                 </div>
                 <div class="col-md-3 col-6">
@@ -496,8 +531,8 @@
                         <div class="trust-icon">
                             <i class="fas fa-brain"></i>
                         </div>
-                        <strong>AI-Powered</strong><br>
-                        <small class="text-muted">Advanced food recognition</small>
+                        <strong data-en="AI-Powered" data-es="Con Inteligencia Artificial">Con Inteligencia Artificial</strong><br>
+                        <small class="text-muted" data-en="Advanced food recognition" data-es="Reconocimiento avanzado de alimentos">Reconocimiento avanzado de alimentos</small>
                     </div>
                 </div>
                 <div class="col-md-3 col-6">
@@ -505,8 +540,8 @@
                         <div class="trust-icon">
                             <i class="fab fa-whatsapp"></i>
                         </div>
-                        <strong>WhatsApp Native</strong><br>
-                        <small class="text-muted">No app download needed</small>
+                        <strong data-en="WhatsApp Native" data-es="Nativo de WhatsApp">Nativo de WhatsApp</strong><br>
+                        <small class="text-muted" data-en="No app download needed" data-es="No necesitas descargar app">No necesitas descargar app</small>
                     </div>
                 </div>
                 <div class="col-md-3 col-6">
@@ -514,8 +549,8 @@
                         <div class="trust-icon">
                             <i class="fas fa-clock"></i>
                         </div>
-                        <strong>24/7 Available</strong><br>
-                        <small class="text-muted">Always ready to help</small>
+                        <strong data-en="24/7 Available" data-es="Disponible 24/7">Disponible 24/7</strong><br>
+                        <small class="text-muted" data-en="Always ready to help" data-es="Siempre listo para ayudar">Siempre listo para ayudar</small>
                     </div>
                 </div>
             </div>
@@ -525,9 +560,9 @@
     <!-- Features Section -->
     <section id="features" class="feature-section">
         <div class="container">
-            <h2 class="section-title">Everything You Need for Healthy Living</h2>
-            <p class="section-subtitle">
-                Our AI-powered WhatsApp bot makes nutrition tracking effortless and effective
+            <h2 class="section-title" data-en="Everything You Need for Healthy Living" data-es="Todo lo que Necesitas para una Vida Saludable">Todo lo que Necesitas para una Vida Saludable</h2>
+            <p class="section-subtitle" data-en="Our AI-powered WhatsApp bot makes nutrition tracking effortless and effective" data-es="Nuestro bot de WhatsApp con IA hace que el seguimiento nutricional sea fácil y efectivo">
+                Nuestro bot de WhatsApp con IA hace que el seguimiento nutricional sea fácil y efectivo
             </p>
             
             <div class="row g-4">
@@ -536,9 +571,9 @@
                         <div class="feature-icon">
                             <i class="fas fa-camera"></i>
                         </div>
-                        <h3 class="feature-title">Smart Photo Analysis</h3>
-                        <p class="feature-description">
-                            Simply snap a photo of your meal and get instant detailed nutritional analysis using advanced computer vision AI.
+                        <h3 class="feature-title" data-en="Smart Photo Analysis" data-es="Análisis Inteligente de Fotos">Análisis Inteligente de Fotos</h3>
+                        <p class="feature-description" data-en="Simply snap a photo of your meal and get instant detailed nutritional analysis using advanced computer vision AI." data-es="Simplemente toma una foto de tu comida y obtén un análisis nutricional detallado instantáneo usando IA de visión computacional avanzada.">
+                            Simplemente toma una foto de tu comida y obtén un análisis nutricional detallado instantáneo usando IA de visión computacional avanzada.
                         </p>
                     </div>
                 </div>
@@ -548,9 +583,9 @@
                         <div class="feature-icon">
                             <i class="fas fa-microphone"></i>
                         </div>
-                        <h3 class="feature-title">Voice Recognition</h3>
-                        <p class="feature-description">
-                            Describe your meals with voice messages. Our speech-to-text technology makes logging effortless and hands-free.
+                        <h3 class="feature-title" data-en="Voice Recognition" data-es="Reconocimiento de Voz">Reconocimiento de Voz</h3>
+                        <p class="feature-description" data-en="Describe your meals with voice messages. Our speech-to-text technology makes logging effortless and hands-free." data-es="Describe tus comidas con mensajes de voz. Nuestra tecnología de voz a texto hace que el registro sea fácil y sin usar las manos.">
+                            Describe tus comidas con mensajes de voz. Nuestra tecnología de voz a texto hace que el registro sea fácil y sin usar las manos.
                         </p>
                     </div>
                 </div>
@@ -560,9 +595,9 @@
                         <div class="feature-icon">
                             <i class="fas fa-chart-line"></i>
                         </div>
-                        <h3 class="feature-title">Progress Tracking</h3>
-                        <p class="feature-description">
-                            Monitor your daily calories, macros, and progress toward your goals with beautiful, easy-to-understand summaries.
+                        <h3 class="feature-title" data-en="Progress Tracking" data-es="Seguimiento de Progreso">Seguimiento de Progreso</h3>
+                        <p class="feature-description" data-en="Monitor your daily calories, macros, and progress toward your goals with beautiful, easy-to-understand summaries." data-es="Monitorea tus calorías diarias, macros y progreso hacia tus objetivos con resúmenes hermosos y fáciles de entender.">
+                            Monitorea tus calorías diarias, macros y progreso hacia tus objetivos con resúmenes hermosos y fáciles de entender.
                         </p>
                     </div>
                 </div>
@@ -572,9 +607,9 @@
                         <div class="feature-icon">
                             <i class="fas fa-bullseye"></i>
                         </div>
-                        <h3 class="feature-title">Personalized Goals</h3>
-                        <p class="feature-description">
-                            Set custom goals for weight loss, maintenance, or muscle gain. Our BMR calculator creates personalized targets.
+                        <h3 class="feature-title" data-en="Personalized Goals" data-es="Objetivos Personalizados">Objetivos Personalizados</h3>
+                        <p class="feature-description" data-en="Set custom goals for weight loss, maintenance, or muscle gain. Our BMR calculator creates personalized targets." data-es="Establece objetivos personalizados para pérdida de peso, mantenimiento o ganancia muscular. Nuestra calculadora de TMB crea objetivos personalizados.">
+                            Establece objetivos personalizados para pérdida de peso, mantenimiento o ganancia muscular. Nuestra calculadora de TMB crea objetivos personalizados.
                         </p>
                     </div>
                 </div>
@@ -584,9 +619,9 @@
                         <div class="feature-icon">
                             <i class="fas fa-lightbulb"></i>
                         </div>
-                        <h3 class="feature-title">Smart Recommendations</h3>
-                        <p class="feature-description">
-                            Get personalized nutrition advice and meal suggestions based on your goals, preferences, and eating patterns.
+                        <h3 class="feature-title" data-en="Smart Recommendations" data-es="Recomendaciones Inteligentes">Recomendaciones Inteligentes</h3>
+                        <p class="feature-description" data-en="Get personalized nutrition advice and meal suggestions based on your goals, preferences, and eating patterns." data-es="Obtén consejos de nutrición personalizados y sugerencias de comidas basadas en tus objetivos, preferencias y patrones alimentarios.">
+                            Obtén consejos de nutrición personalizados y sugerencias de comidas basadas en tus objetivos, preferencias y patrones alimentarios.
                         </p>
                     </div>
                 </div>
@@ -596,9 +631,9 @@
                         <div class="feature-icon">
                             <i class="fas fa-mobile-alt"></i>
                         </div>
-                        <h3 class="feature-title">No App Required</h3>
-                        <p class="feature-description">
-                            Works entirely within WhatsApp. No downloads, no new logins, no learning curve. Start tracking immediately.
+                        <h3 class="feature-title" data-en="No App Required" data-es="No Requiere App">No Requiere App</h3>
+                        <p class="feature-description" data-en="Works entirely within WhatsApp. No downloads, no new logins, no learning curve. Start tracking immediately." data-es="Funciona completamente dentro de WhatsApp. Sin descargas, sin nuevos inicios de sesión, sin curva de aprendizaje. Comienza a rastrear inmediatamente.">
+                            Funciona completamente dentro de WhatsApp. Sin descargas, sin nuevos inicios de sesión, sin curva de aprendizaje. Comienza a rastrear inmediatamente.
                         </p>
                     </div>
                 </div>
@@ -609,9 +644,9 @@
     <!-- How It Works Section -->
     <section id="how-it-works" class="stats-section">
         <div class="container">
-            <h2 class="section-title">How It Works</h2>
-            <p class="section-subtitle">
-                Get started in three simple steps
+            <h2 class="section-title" data-en="How It Works" data-es="Cómo Funciona">Cómo Funciona</h2>
+            <p class="section-subtitle" data-en="Get started in three simple steps" data-es="Comienza en tres simples pasos">
+                Comienza en tres simples pasos
             </p>
             
             <div class="row g-4">
@@ -622,9 +657,9 @@
                                 <span style="font-weight: 700; font-size: 1.5rem;">1</span>
                             </div>
                         </div>
-                        <h3 class="feature-title">Send Your Food</h3>
-                        <p class="feature-description">
-                            Take a photo, send a voice message, or type what you ate directly in WhatsApp.
+                        <h3 class="feature-title" data-en="Send Your Food" data-es="Envía tu Comida">Envía tu Comida</h3>
+                        <p class="feature-description" data-en="Take a photo, send a voice message, or type what you ate directly in WhatsApp." data-es="Toma una foto, envía un mensaje de voz, o escribe lo que comiste directamente en WhatsApp.">
+                            Toma una foto, envía un mensaje de voz, o escribe lo que comiste directamente en WhatsApp.
                         </p>
                     </div>
                 </div>
@@ -636,9 +671,9 @@
                                 <span style="font-weight: 700; font-size: 1.5rem;">2</span>
                             </div>
                         </div>
-                        <h3 class="feature-title">Get AI Analysis</h3>
-                        <p class="feature-description">
-                            Our AI instantly analyzes your food and provides detailed nutritional information.
+                        <h3 class="feature-title" data-en="Get AI Analysis" data-es="Obtén Análisis IA">Obtén Análisis IA</h3>
+                        <p class="feature-description" data-en="Our AI instantly analyzes your food and provides detailed nutritional information." data-es="Nuestra IA analiza instantáneamente tu comida y proporciona información nutricional detallada.">
+                            Nuestra IA analiza instantáneamente tu comida y proporciona información nutricional detallada.
                         </p>
                     </div>
                 </div>
@@ -650,9 +685,9 @@
                                 <span style="font-weight: 700; font-size: 1.5rem;">3</span>
                             </div>
                         </div>
-                        <h3 class="feature-title">Track Progress</h3>
-                        <p class="feature-description">
-                            Monitor your daily progress and receive personalized recommendations for your goals.
+                        <h3 class="feature-title" data-en="Track Progress" data-es="Rastrea Progreso">Rastrea Progreso</h3>
+                        <p class="feature-description" data-en="Monitor your daily progress and receive personalized recommendations for your goals." data-es="Monitorea tu progreso diario y recibe recomendaciones personalizadas para tus objetivos.">
+                            Monitorea tu progreso diario y recibe recomendaciones personalizadas para tus objetivos.
                         </p>
                     </div>
                 </div>
@@ -663,23 +698,23 @@
     <!-- Stats Section -->
     <section class="feature-section">
         <div class="container">
-            <h2 class="section-title">Trusted by Health-Conscious Users</h2>
+            <h2 class="section-title" data-en="Trusted by Health-Conscious Users" data-es="Confiado por Usuarios Conscientes de la Salud">Confiado por Usuarios Conscientes de la Salud</h2>
             <div class="row g-4 text-center">
                 <div class="col-lg-3 col-md-6">
                     <div class="stat-number" id="totalUsers">1,200+</div>
-                    <div class="stat-label">Active Users</div>
+                    <div class="stat-label" data-en="Active Users" data-es="Usuarios Activos">Usuarios Activos</div>
                 </div>
                 <div class="col-lg-3 col-md-6">
                     <div class="stat-number" id="foodLogs">15,000+</div>
-                    <div class="stat-label">Meals Analyzed</div>
+                    <div class="stat-label" data-en="Meals Analyzed" data-es="Comidas Analizadas">Comidas Analizadas</div>
                 </div>
                 <div class="col-lg-3 col-md-6">
                     <div class="stat-number" id="calories">2.5M+</div>
-                    <div class="stat-label">Calories Tracked</div>
+                    <div class="stat-label" data-en="Calories Tracked" data-es="Calorías Rastreadas">Calorías Rastreadas</div>
                 </div>
                 <div class="col-lg-3 col-md-6">
                     <div class="stat-number">98%</div>
-                    <div class="stat-label">Accuracy Rate</div>
+                    <div class="stat-label" data-en="Accuracy Rate" data-es="Tasa de Precisión">Tasa de Precisión</div>
                 </div>
             </div>
         </div>
@@ -688,13 +723,13 @@
     <!-- CTA Section -->
     <section class="cta-section">
         <div class="container">
-            <h2 class="cta-title">Start Your Health Journey Today</h2>
-            <p class="cta-subtitle">
-                Join thousands of users who are already achieving their health goals with Caloria's AI-powered nutrition tracking.
+            <h2 class="cta-title" data-en="Start Your Health Journey Today" data-es="Comienza tu Viaje de Salud Hoy">Comienza tu Viaje de Salud Hoy</h2>
+            <p class="cta-subtitle" data-en="Join thousands of users who are already achieving their health goals with Caloria's AI-powered nutrition tracking." data-es="Únete a miles de usuarios que ya están alcanzando sus objetivos de salud con el seguimiento nutricional con IA de Caloria.">
+                Únete a miles de usuarios que ya están alcanzando sus objetivos de salud con el seguimiento nutricional con IA de Caloria.
             </p>
             <a href="#" class="btn-white">
                 <i class="fab fa-whatsapp me-2"></i>
-                Start Free on WhatsApp
+                <span data-en="Start Free on WhatsApp" data-es="Comenzar Gratis en WhatsApp">Comenzar Gratis en WhatsApp</span>
             </a>
         </div>
     </section>
@@ -708,37 +743,37 @@
                         <i class="fas fa-leaf me-2"></i>
                         Caloria
                     </h5>
-                    <p class="text-muted">
-                        AI-powered nutrition tracking made simple. Track calories, analyze food, and achieve your health goals through WhatsApp.
+                    <p class="text-muted" data-en="AI-powered nutrition tracking made simple. Track calories, analyze food, and achieve your health goals through WhatsApp." data-es="Seguimiento nutricional con IA hecho simple. Rastrea calorías, analiza comida y alcanza tus objetivos de salud a través de WhatsApp.">
+                        Seguimiento nutricional con IA hecho simple. Rastrea calorías, analiza comida y alcanza tus objetivos de salud a través de WhatsApp.
                     </p>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
-                    <h6 class="footer-title">Product</h6>
-                    <a href="#features" class="footer-link">Features</a>
-                    <a href="#how-it-works" class="footer-link">How It Works</a>
-                    <a href="{{ url_for('admin_login') }}" class="footer-link">Admin Panel</a>
+                    <h6 class="footer-title" data-en="Product" data-es="Producto">Producto</h6>
+                    <a href="#features" class="footer-link" data-en="Features" data-es="Características">Características</a>
+                    <a href="#how-it-works" class="footer-link" data-en="How It Works" data-es="Cómo Funciona">Cómo Funciona</a>
+                    <a href="{{ url_for('admin_login') }}" class="footer-link" data-en="Admin Panel" data-es="Panel de Admin">Panel de Admin</a>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
-                    <h6 class="footer-title">Company</h6>
-                    <a href="#" class="footer-link">About Us</a>
-                    <a href="#" class="footer-link">Contact</a>
-                    <a href="#" class="footer-link">Blog</a>
+                    <h6 class="footer-title" data-en="Company" data-es="Empresa">Empresa</h6>
+                    <a href="#" class="footer-link" data-en="About Us" data-es="Acerca de Nosotros">Acerca de Nosotros</a>
+                    <a href="#" class="footer-link" data-en="Contact" data-es="Contacto">Contacto</a>
+                    <a href="#" class="footer-link" data-en="Blog" data-es="Blog">Blog</a>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
-                    <h6 class="footer-title">Legal</h6>
-                    <a href="{{ url_for('privacy_policy') }}" class="footer-link">Privacy Policy</a>
-                    <a href="{{ url_for('terms_conditions') }}" class="footer-link">Terms of Service</a>
-                    <a href="#" class="footer-link">Cookie Policy</a>
+                    <h6 class="footer-title" data-en="Legal" data-es="Legal">Legal</h6>
+                    <a href="{{ url_for('privacy_policy') }}" class="footer-link" data-en="Privacy Policy" data-es="Política de Privacidad">Política de Privacidad</a>
+                    <a href="{{ url_for('terms_conditions') }}" class="footer-link" data-en="Terms of Service" data-es="Términos de Servicio">Términos de Servicio</a>
+                    <a href="#" class="footer-link" data-en="Cookie Policy" data-es="Política de Cookies">Política de Cookies</a>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
-                    <h6 class="footer-title">Support</h6>
-                    <a href="#" class="footer-link">Help Center</a>
-                    <a href="#" class="footer-link">Contact Support</a>
-                    <a href="#" class="footer-link">System Status</a>
+                    <h6 class="footer-title" data-en="Support" data-es="Soporte">Soporte</h6>
+                    <a href="#" class="footer-link" data-en="Help Center" data-es="Centro de Ayuda">Centro de Ayuda</a>
+                    <a href="#" class="footer-link" data-en="Contact Support" data-es="Contactar Soporte">Contactar Soporte</a>
+                    <a href="#" class="footer-link" data-en="System Status" data-es="Estado del Sistema">Estado del Sistema</a>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2024 Caloria. All rights reserved. Made with ❤️ for healthy living.</p>
+                <p data-en="&copy; 2025 Caloria. All rights reserved. Made with ❤️ for healthy living." data-es="&copy; 2025 Caloria. Todos los derechos reservados. Hecho con ❤️ para una vida saludable.">&copy; 2025 Caloria. Todos los derechos reservados. Hecho con ❤️ para una vida saludable.</p>
             </div>
         </div>
     </footer>
@@ -747,6 +782,49 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
+        // Language switching functionality
+        let currentLanguage = 'es'; // Default to Spanish
+
+        function switchLanguage(lang) {
+            currentLanguage = lang;
+            
+            // Update HTML lang attribute
+            document.documentElement.lang = lang;
+            
+            // Update all elements with data attributes
+            const elements = document.querySelectorAll('[data-' + lang + ']');
+            elements.forEach(element => {
+                const text = element.getAttribute('data-' + lang);
+                if (element.tagName === 'META') {
+                    element.setAttribute('content', text);
+                } else if (element.tagName === 'TITLE') {
+                    element.textContent = text;
+                } else {
+                    element.innerHTML = text;
+                }
+            });
+            
+            // Update active language switch button
+            document.querySelectorAll('.language-switch').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-lang') === lang) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Save language preference
+            localStorage.setItem('caloria-language', lang);
+        }
+
+        // Load saved language preference or default to Spanish
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedLang = localStorage.getItem('caloria-language') || 'es';
+            switchLanguage(savedLang);
+            
+            // Initialize other animations
+            animateNumbers();
+        });
+
         // Smooth scrolling for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
@@ -780,11 +858,6 @@
                 observer.observe(number);
             });
         }
-
-        // Initialize animations
-        document.addEventListener('DOMContentLoaded', function() {
-            animateNumbers();
-        });
 
         // Add scroll effect to navbar
         window.addEventListener('scroll', function() {

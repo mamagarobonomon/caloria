@@ -404,6 +404,16 @@
             display: inline-block;
             margin-bottom: 2rem;
         }
+
+        .chat-food-image {
+            width: 100%;
+            max-width: 200px;
+            height: 120px;
+            border-radius: 12px;
+            object-fit: cover;
+            margin-top: 0.5rem;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -481,7 +491,12 @@
                             
                             <div class="chat-message user">
                                 <i class="fas fa-camera me-2"></i>
-                                <span data-en="[Photo of grilled salmon with vegetables]" data-es="[Foto de salmón a la parrilla con vegetales]">[Foto de salmón a la parrilla con vegetales]</span>
+                                <span data-en="Photo sent" data-es="Foto enviada">Foto enviada</span>
+                                <img src="https://images.unsplash.com/photo-1467003909585-2f8a72700288?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2340&q=80" 
+                                     alt="Grilled salmon with vegetables" 
+                                     class="chat-food-image"
+                                     data-en-alt="Grilled salmon with vegetables" 
+                                     data-es-alt="Salmón a la parrilla con vegetales">
                             </div>
                             
                             <div class="chat-message">

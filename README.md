@@ -198,32 +198,34 @@ Bot: 📊 Nutritional Analysis:
 
 ## 🚀 Deployment
 
-### Production Deployment
+### Production Deployment Guide
 
-1. **Set up hosting** (AWS, Heroku, DigitalOcean)
-2. **Configure environment variables**
-3. **Set up PostgreSQL database**
-4. **Configure domain and SSL**
-5. **Set up ManyChat webhook**
+**📖 Complete deployment instructions**: See [`DEPLOYMENT_CONSOLIDATED.md`](./DEPLOYMENT_CONSOLIDATED.md)
 
-### Docker Deployment (Optional)
-```dockerfile
-FROM python:3.9-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-EXPOSE 5000
-CMD ["python", "app.py"]
-```
+**Quick Overview:**
+1. **VPS Setup**: King Servers VPS (162.248.225.106) with Ubuntu 22.04
+2. **Domain**: caloria.vip with GoDaddy DNS configuration
+3. **SSL**: Let's Encrypt automatic certificates
+4. **Deployment**: Safe, multi-project compatible scripts
+5. **Language**: Spanish/English bilingual website
 
-### Environment Configuration
+**🎯 Features of Current Deployment:**
+- ✅ **Live Website**: https://caloria.vip (Spanish default + EN toggle)
+- ✅ **Admin Panel**: https://caloria.vip/admin (`admin` / `CaloriaAdmin2025!`)
+- ✅ **SSL Security**: HTTPS with auto-renewal
+- ✅ **Isolated Setup**: Won't interfere with other projects
+- ✅ **WhatsApp Integration**: Ready for ManyChat connection
+
+### Quick Update Commands
 ```bash
-# Production settings
-export FLASK_ENV=production
-export SECRET_KEY="complex-production-secret"
-export DATABASE_URL="postgresql://..."
+# Update deployed application (after code changes)
+ssh vps@162.248.225.106 "cd /var/www/caloria && sudo -u caloria git pull origin main && sudo -u caloria pkill -f gunicorn; sudo -u caloria bash -c 'cd /var/www/caloria && source venv/bin/activate && nohup gunicorn --bind 127.0.0.1:5001 --workers 2 --timeout 300 app:app > logs/gunicorn.log 2>&1 &'"
 ```
+
+### Alternative Deployment Options
+- **Docker**: See `Dockerfile` for containerized deployment
+- **Google Cloud**: See `app.yaml` for App Engine deployment
+- **Other VPS**: Adapt the safe deployment scripts
 
 ## 📊 Monitoring and Analytics
 

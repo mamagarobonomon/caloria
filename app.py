@@ -3565,38 +3565,40 @@ if __name__ == '__main__':
     if not scheduler.running:
         scheduler.start()
     
-    # Health check endpoints
-    @app.route('/health/database')
-    def database_health():
-        """Database health check endpoint"""
-        try:
-            with app.app_context():
-                from sqlalchemy import text
-                db.engine.execute(text("SELECT 1"))
-                user_count = User.query.count()
-            
-            db_uri = app.config['SQLALCHEMY_DATABASE_URI']
-            return {
-                "status": "healthy",
-                "database": db_uri.split('://')[0].upper(),
-                "user_count": user_count,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        except Exception as e:
-            return {
-                "status": "unhealthy", 
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }, 500
-
-    @app.route('/health')
-    def general_health():
-        """General application health check"""
+# Health check endpoints (moved outside __main__ block)
+@app.route('/health/database')
+def database_health():
+    """Database health check endpoint"""
+    try:
+        with app.app_context():
+            from sqlalchemy import text
+            db.engine.execute(text("SELECT 1"))
+            user_count = User.query.count()
+        
+        db_uri = app.config['SQLALCHEMY_DATABASE_URI']
         return {
             "status": "healthy",
-            "application": "Caloria",
+            "database": db_uri.split('://')[0].upper(),
+            "user_count": user_count,
             "timestamp": datetime.utcnow().isoformat()
         }
+    except Exception as e:
+        return {
+            "status": "unhealthy", 
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }, 500
+
+@app.route('/health')
+def general_health():
+    """General application health check"""
+    return {
+        "status": "healthy",
+        "application": "Caloria",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+if __name__ == '__main__':
 
     # Use port 5001 to avoid conflicts with other projects
     port = int(os.getenv('PORT', 5001))

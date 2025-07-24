@@ -72,6 +72,7 @@
                             <th>Profile</th>
                             <th>Goal</th>
                             <th>Quiz</th>
+                            <th>Subscription</th>
                             <th>Activity</th>
                             <th>Joined</th>
                             <th>Actions</th>
@@ -137,6 +138,43 @@
                                 {% else %}
                                     <span class="badge bg-warning">
                                         <i class="fas fa-clock me-1"></i>Pending
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.subscription_status == 'trial_active' %}
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-crown me-1"></i>Trial Active
+                                    </span>
+                                    {% if user.trial_end_time %}
+                                        <div class="small text-muted">
+                                            Ends {{ user.trial_end_time.strftime('%m/%d %H:%M') }}
+                                        </div>
+                                    {% endif %}
+                                {% elif user.subscription_status == 'active' %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-star me-1"></i>Premium
+                                    </span>
+                                    {% if user.last_payment_date %}
+                                        <div class="small text-muted">
+                                            Paid {{ user.last_payment_date.strftime('%m/%d') }}
+                                        </div>
+                                    {% endif %}
+                                {% elif user.subscription_status == 'trial_pending' %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-hourglass-half me-1"></i>Trial Pending
+                                    </span>
+                                {% elif user.subscription_status == 'cancelled' %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-times me-1"></i>Cancelled
+                                    </span>
+                                {% elif user.subscription_status == 'expired' %}
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-clock me-1"></i>Expired
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark">
+                                        <i class="fas fa-user me-1"></i>Free
                                     </span>
                                 {% endif %}
                             </td>

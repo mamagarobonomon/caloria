@@ -167,6 +167,145 @@
     </div>
 </div>
 
+<!-- Subscription Information -->
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-crown me-2"></i>Subscription Status
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-6 mb-3">
+                        <label class="text-muted small">Current Status</label>
+                        <p class="h6">
+                            {% if user.subscription_status == 'trial_active' %}
+                                <span class="badge bg-info">
+                                    <i class="fas fa-crown me-1"></i>Trial Active
+                                </span>
+                            {% elif user.subscription_status == 'active' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-star me-1"></i>Premium Active
+                                </span>
+                            {% elif user.subscription_status == 'trial_pending' %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-hourglass-half me-1"></i>Trial Pending
+                                </span>
+                            {% elif user.subscription_status == 'cancelled' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times me-1"></i>Cancelled
+                                </span>
+                            {% elif user.subscription_status == 'expired' %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-clock me-1"></i>Expired
+                                </span>
+                            {% else %}
+                                <span class="badge bg-light text-dark">
+                                    <i class="fas fa-user me-1"></i>Free User
+                                </span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-sm-6 mb-3">
+                        <label class="text-muted small">Subscription Tier</label>
+                        <p class="h6">{{ user.subscription_tier|title|replace('_', ' ') if user.subscription_tier else 'Free' }}</p>
+                    </div>
+                    {% if user.trial_start_time %}
+                    <div class="col-sm-6 mb-3">
+                        <label class="text-muted small">Trial Started</label>
+                        <p class="h6">{{ user.trial_start_time.strftime('%m/%d/%y %H:%M') }}</p>
+                    </div>
+                    {% endif %}
+                    {% if user.trial_end_time %}
+                    <div class="col-sm-6 mb-3">
+                        <label class="text-muted small">Trial Ends</label>
+                        <p class="h6">{{ user.trial_end_time.strftime('%m/%d/%y %H:%M') }}</p>
+                    </div>
+                    {% endif %}
+                    {% if user.last_payment_date %}
+                    <div class="col-sm-6 mb-3">
+                        <label class="text-muted small">Last Payment</label>
+                        <p class="h6">{{ user.last_payment_date.strftime('%m/%d/%y %H:%M') }}</p>
+                    </div>
+                    {% endif %}
+                    {% if user.mercadopago_subscription_id %}
+                    <div class="col-sm-6 mb-3">
+                        <label class="text-muted small">MercadoPago ID</label>
+                        <p class="h6"><code>{{ user.mercadopago_subscription_id[:20] }}...</code></p>
+                    </div>
+                    {% endif %}
+                    {% if user.cancellation_reason %}
+                    <div class="col-12 mb-3">
+                        <label class="text-muted small">Cancellation Reason</label>
+                        <p class="h6">{{ user.cancellation_reason }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-credit-card me-2"></i>Payment History
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if user.payment_transactions %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for transaction in user.payment_transactions[:10] %}
+                                <tr>
+                                    <td>
+                                        <small>{{ transaction.payment_date.strftime('%m/%d/%y') }}</small>
+                                    </td>
+                                    <td>
+                                        <small><strong>${{ "%.2f"|format(transaction.amount/100) }} ARS</strong></small>
+                                    </td>
+                                    <td>
+                                        {% if transaction.status == 'approved' %}
+                                            <span class="badge bg-success">Approved</span>
+                                        {% elif transaction.status == 'pending' %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% elif transaction.status == 'rejected' %}
+                                            <span class="badge bg-danger">Rejected</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ transaction.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ transaction.transaction_type|title|replace('_', ' ') }}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-credit-card fa-3x text-muted mb-3"></i>
+                        <h6 class="text-muted">No Payment History</h6>
+                        <p class="text-muted">No payment transactions found for this user.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Food Logs -->
 <div class="row mb-4">
     <div class="col-12">

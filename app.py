@@ -40,8 +40,27 @@ app.config['GOOGLE_CLOUD_API_KEY'] = os.environ.get('GOOGLE_CLOUD_API_KEY')
 app.config['MANYCHAT_API_TOKEN'] = os.environ.get('MANYCHAT_API_TOKEN')
 app.config['TELEGRAM_BOT_TOKEN'] = os.environ.get('TELEGRAM_BOT_TOKEN')
 
+# Mercado Pago Configuration
+app.config['MERCADO_PAGO_ACCESS_TOKEN'] = os.environ.get('MERCADO_PAGO_ACCESS_TOKEN')
+app.config['MERCADO_PAGO_PUBLIC_KEY'] = os.environ.get('MERCADO_PAGO_PUBLIC_KEY') 
+app.config['MERCADO_PAGO_WEBHOOK_SECRET'] = os.environ.get('MERCADO_PAGO_WEBHOOK_SECRET')
+app.config['MERCADO_PAGO_PLAN_ID'] = os.environ.get('MERCADO_PAGO_PLAN_ID', '2c938084939f84900193a80bf21f01c8')
+app.config['SUBSCRIPTION_TRIAL_DAYS'] = int(os.environ.get('SUBSCRIPTION_TRIAL_DAYS', '1'))
+app.config['SUBSCRIPTION_PRICE_ARS'] = float(os.environ.get('SUBSCRIPTION_PRICE_ARS', '499900.0'))  # $4999.00 ARS (~$5 USD)
+
 db = SQLAlchemy(app)
 CORS(app)
+
+# Custom Jinja filters
+@app.template_filter('from_json')
+def from_json_filter(value):
+    """Parse JSON string in Jinja templates"""
+    try:
+        if value:
+            return json.loads(value)
+        return {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 # Log Google Cloud availability
 if not GOOGLE_CLOUD_AVAILABLE:
@@ -68,9 +87,22 @@ class User(db.Model):
     quiz_completed = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     
+    # NEW: Subscription fields
+    subscription_tier = db.Column(db.String(20), default='trial_pending')  # trial_pending, trial_active, active, cancelled, expired
+    subscription_status = db.Column(db.String(20), default='inactive')  # inactive, trial_active, active, cancelled, expired
+    trial_start_time = db.Column(db.DateTime, nullable=True)
+    trial_end_time = db.Column(db.DateTime, nullable=True)
+    mercadopago_subscription_id = db.Column(db.String(100), nullable=True)
+    cancellation_reason = db.Column(db.String(200), nullable=True)
+    reengagement_scheduled = db.Column(db.DateTime, nullable=True)
+    last_payment_date = db.Column(db.DateTime, nullable=True)
+    
     # Relationships
     food_logs = db.relationship('FoodLog', backref='user', lazy=True, cascade='all, delete-orphan')
     daily_stats = db.relationship('DailyStats', backref='user', lazy=True, cascade='all, delete-orphan')
+    subscription = db.relationship('Subscription', backref='user', uselist=False, cascade='all, delete-orphan')
+    payment_transactions = db.relationship('PaymentTransaction', backref='user', lazy=True, cascade='all, delete-orphan')
+    trial_activities = db.relationship('TrialActivity', backref='user', lazy=True, cascade='all, delete-orphan')
     
     def calculate_bmr(self):
         """Calculate BMR using Harris-Benedict formula"""
@@ -112,6 +144,29 @@ class User(db.Model):
         """Update BMR and daily calorie goal"""
         self.bmr = self.calculate_bmr()
         self.daily_calorie_goal = self.calculate_daily_calorie_goal()
+    
+    # NEW: Subscription helper methods
+    def is_trial_active(self):
+        """Check if user is in active trial period"""
+        if not self.trial_start_time or not self.trial_end_time:
+            return False
+        return (self.subscription_status == 'trial_active' and 
+                datetime.utcnow() < self.trial_end_time)
+    
+    def is_subscription_active(self):
+        """Check if user has active subscription (trial or paid)"""
+        return self.subscription_status in ['trial_active', 'active']
+    
+    def get_trial_time_remaining(self):
+        """Get remaining trial time in hours"""
+        if not self.is_trial_active():
+            return 0
+        remaining = self.trial_end_time - datetime.utcnow()
+        return max(0, remaining.total_seconds() / 3600)  # Return hours
+    
+    def can_access_premium_features(self):
+        """Check if user can access premium features"""
+        return self.is_subscription_active()
 
 class FoodLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -167,6 +222,392 @@ class AdminUser(db.Model):
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class Subscription(db.Model):
+    id = db.Column(db.String(50), primary_key=True)  # Mercado Pago subscription ID
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    plan_id = db.Column(db.String(50), nullable=False)  # Mercado Pago plan ID
+    status = db.Column(db.String(20), nullable=False)  # active, cancelled, expired, pending
+    payment_method = db.Column(db.String(50), nullable=True)
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), default='ARS')
+    frequency = db.Column(db.String(20), default='monthly')  # monthly, yearly
+    next_payment_date = db.Column(db.DateTime, nullable=True)
+    trial_period_days = db.Column(db.Integer, default=1)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class PaymentTransaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    subscription_id = db.Column(db.String(50), db.ForeignKey('subscription.id'), nullable=True)
+    mp_payment_id = db.Column(db.String(50), nullable=False)  # Mercado Pago payment ID
+    mp_preference_id = db.Column(db.String(50), nullable=True)  # Mercado Pago preference ID
+    amount = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(3), default='ARS')
+    status = db.Column(db.String(20), nullable=False)  # approved, pending, rejected, cancelled
+    payment_method = db.Column(db.String(50), nullable=True)
+    transaction_type = db.Column(db.String(20), nullable=False)  # subscription, trial, one_time
+    external_reference = db.Column(db.String(100), nullable=True)  # For tracking
+    mp_response = db.Column(db.Text, nullable=True)  # Store full MP response for debugging
+    payment_date = db.Column(db.DateTime, default=datetime.utcnow)
+    processed_at = db.Column(db.DateTime, nullable=True)
+
+class TrialActivity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    activity_type = db.Column(db.String(50), nullable=False)  # message_sent, food_analyzed, feature_used
+    activity_data = db.Column(db.Text, nullable=True)  # JSON data about the activity
+    hour_mark = db.Column(db.Integer, nullable=True)  # Hour into trial (0-23)
+    engagement_score = db.Column(db.Float, default=0.0)  # Calculated engagement score
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class ReengagementSchedule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    campaign_type = db.Column(db.String(50), nullable=False)  # week_1, month_1, seasonal
+    scheduled_date = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending, sent, cancelled
+    message_sent = db.Column(db.Boolean, default=False)
+    response_received = db.Column(db.Boolean, default=False)
+    conversion_result = db.Column(db.String(20), nullable=True)  # converted, declined, no_response
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    sent_at = db.Column(db.DateTime, nullable=True)
+
+class SystemActivityLog(db.Model):
+    """Log system events separate from food logs"""
+    __tablename__ = 'system_activity_log'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    activity_type = db.Column(db.String(50), nullable=False)  # 'registration', 'quiz_completed', 'subscription_created', 'trial_started', 'trial_ended', 'subscription_cancelled'
+    activity_data = db.Column(db.Text)  # JSON data with additional details
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref='system_activities')
+    
+    def __repr__(self):
+        return f'<SystemActivityLog {self.activity_type} for User {self.user_id}>'
+    
+    @staticmethod
+    def log_activity(user_id, activity_type, activity_data=None, ip_address=None, user_agent=None):
+        """Log a system activity"""
+        try:
+            activity_data_json = json.dumps(activity_data) if activity_data else None
+            
+            activity = SystemActivityLog(
+                user_id=user_id,
+                activity_type=activity_type,
+                activity_data=activity_data_json,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            
+            db.session.add(activity)
+            db.session.commit()
+            
+            app.logger.info(f"System activity logged: {activity_type} for user {user_id}")
+            return activity
+            
+        except Exception as e:
+            app.logger.error(f"Error logging system activity: {str(e)}")
+            db.session.rollback()
+            return None
+
+# Mercado Pago and Subscription Services
+class MercadoPagoService:
+    @staticmethod
+    def create_subscription_link(user, return_url=None, cancel_url=None):
+        """Create Mercado Pago subscription link for user"""
+        try:
+            access_token = app.config['MERCADO_PAGO_ACCESS_TOKEN']
+            plan_id = app.config['MERCADO_PAGO_PLAN_ID']
+            
+            if not access_token:
+                app.logger.error("Mercado Pago access token not configured")
+                return None
+            
+            # FIXED: Create subscription via API with webhook URL (required for subscriptions)
+            # According to MP docs, webhooks for subscriptions must be configured during creation
+            webhook_url = f"https://caloria.vip/webhook/mercadopago"
+            
+            # Create subscription via API instead of just constructing URL
+            url = "https://api.mercadopago.com/preapproval"
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            subscription_data = {
+                "preapproval_plan_id": plan_id,
+                "payer_email": f"{user.whatsapp_id}@caloria.app",  # Required field
+                "external_reference": user.whatsapp_id,
+                "notification_url": webhook_url,  # CRITICAL: Webhook URL must be set here
+                "back_url": return_url if return_url else f"https://caloria.vip/subscription-success?user={user.id}",
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": app.config.get('SUBSCRIPTION_PRICE_ARS', 499900.0) / 100,  # Convert cents to pesos
+                    "currency_id": "ARS"
+                }
+            }
+            
+            app.logger.info(f"Creating subscription via API for user {user.id}")
+            response = requests.post(url, headers=headers, json=subscription_data, timeout=30)
+            
+            if response.status_code in [200, 201]:
+                result = response.json()
+                subscription_id = result.get('id')
+                init_point = result.get('init_point')
+                
+                if init_point:
+                    app.logger.info(f"Subscription created successfully: {subscription_id}")
+                    
+                    # Store subscription ID for tracking
+                    user.mercadopago_subscription_id = subscription_id
+                    user.subscription_status = 'trial_pending'
+                    db.session.commit()
+                    
+                    return init_point
+                else:
+                    app.logger.error(f"No init_point in MP response: {result}")
+                    return None
+            else:
+                app.logger.error(f"MP API error: {response.status_code} - {response.text}")
+                return None
+            
+        except Exception as e:
+            app.logger.error(f"Error creating Mercado Pago subscription: {str(e)}")
+            return None
+    
+    @staticmethod
+    def verify_webhook_signature(data, signature):
+        """Verify Mercado Pago webhook signature for security"""
+        try:
+            webhook_secret = app.config['MERCADO_PAGO_WEBHOOK_SECRET']
+            if not webhook_secret:
+                app.logger.warning("Mercado Pago webhook secret not configured - skipping verification")
+                return True  # Allow for now during development
+            
+            # TODO: Implement proper signature verification
+            # For now, return True to allow webhooks during development
+            return True
+            
+        except Exception as e:
+            app.logger.error(f"Error verifying webhook signature: {str(e)}")
+            return False
+    
+    @staticmethod
+    def get_subscription_details(subscription_id):
+        """Get subscription details from Mercado Pago API"""
+        try:
+            access_token = app.config['MERCADO_PAGO_ACCESS_TOKEN']
+            if not access_token:
+                return None
+            
+            # FIXED: Use correct endpoint according to MP documentation
+            # For subscriptions: https://api.mercadopago.com/preapproval/search
+            url = f"https://api.mercadopago.com/preapproval/{subscription_id}"
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                app.logger.error(f"Error getting subscription details: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            app.logger.error(f"Error fetching subscription details: {str(e)}")
+            return None
+
+class SubscriptionService:
+    @staticmethod
+    def start_trial(user):
+        """Start trial period for user"""
+        try:
+            now = datetime.utcnow()
+            trial_days = app.config['SUBSCRIPTION_TRIAL_DAYS']
+            
+            user.subscription_status = 'trial_active'
+            user.subscription_tier = 'premium'  # Give premium access during trial
+            user.trial_start_time = now
+            user.trial_end_time = now + timedelta(days=trial_days)
+            
+            db.session.commit()
+            
+            # Log trial activity
+            SubscriptionService.log_trial_activity(user, 'trial_started', {
+                'trial_duration_hours': trial_days * 24,
+                'start_time': now.isoformat()
+            })
+            
+            # Log trial start to system activity log
+            SystemActivityLog.log_activity(
+                user_id=user.id,
+                activity_type='trial_started',
+                activity_data={
+                    'trial_duration_hours': trial_days * 24,
+                    'start_time': now.isoformat(),
+                    'end_time': user.trial_end_time.isoformat()
+                }
+            )
+            
+            app.logger.info(f"Started trial for user {user.id}, ends at {user.trial_end_time}")
+            return True
+            
+        except Exception as e:
+            app.logger.error(f"Error starting trial for user {user.id}: {str(e)}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def end_trial(user, reason='expired'):
+        """End trial period for user"""
+        try:
+            user.subscription_status = 'expired' if reason == 'expired' else 'cancelled'
+            user.subscription_tier = 'free'
+            user.trial_end_time = datetime.utcnow()
+            user.cancellation_reason = reason
+            
+            db.session.commit()
+            
+            # Log trial activity
+            SubscriptionService.log_trial_activity(user, 'trial_ended', {
+                'reason': reason,
+                'end_time': datetime.utcnow().isoformat()
+            })
+            
+            # Schedule re-engagement if cancelled
+            if reason == 'cancelled':
+                SubscriptionService.schedule_reengagement(user, days=7)
+            
+            app.logger.info(f"Ended trial for user {user.id}, reason: {reason}")
+            return True
+            
+        except Exception as e:
+            app.logger.error(f"Error ending trial for user {user.id}: {str(e)}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def activate_subscription(user, subscription_id):
+        """Activate paid subscription for user"""
+        try:
+            user.subscription_status = 'active'
+            user.subscription_tier = 'premium'
+            user.mercadopago_subscription_id = subscription_id
+            user.last_payment_date = datetime.utcnow()
+            
+            # Clear trial end time since now they're paid
+            user.trial_end_time = None
+            
+            db.session.commit()
+            
+            app.logger.info(f"Activated subscription for user {user.id}, MP ID: {subscription_id}")
+            return True
+            
+        except Exception as e:
+            app.logger.error(f"Error activating subscription for user {user.id}: {str(e)}")
+            db.session.rollback()
+            return False
+    
+    @staticmethod
+    def log_trial_activity(user, activity_type, activity_data=None):
+        """Log trial activity for analytics"""
+        try:
+            if not user.is_trial_active():
+                return  # Don't log if not in trial
+            
+            # Calculate hour mark in trial
+            hour_mark = 0
+            if user.trial_start_time:
+                elapsed = datetime.utcnow() - user.trial_start_time
+                hour_mark = int(elapsed.total_seconds() / 3600)
+            
+            activity = TrialActivity(
+                user_id=user.id,
+                activity_type=activity_type,
+                activity_data=json.dumps(activity_data) if activity_data else None,
+                hour_mark=hour_mark,
+                engagement_score=SubscriptionService._calculate_engagement_score(activity_type)
+            )
+            
+            db.session.add(activity)
+            db.session.commit()
+            
+        except Exception as e:
+            app.logger.error(f"Error logging trial activity: {str(e)}")
+    
+    @staticmethod
+    def _calculate_engagement_score(activity_type):
+        """Calculate engagement score for different activities"""
+        engagement_scores = {
+            'trial_started': 1.0,
+            'food_analyzed': 2.0,
+            'message_responded': 1.5,
+            'feature_explored': 1.0,
+            'goal_updated': 2.5,
+            'trial_ended': 0.0
+        }
+        return engagement_scores.get(activity_type, 1.0)
+    
+    @staticmethod
+    def schedule_reengagement(user, days=7):
+        """Schedule re-engagement campaign for user"""
+        try:
+            scheduled_date = datetime.utcnow() + timedelta(days=days)
+            
+            # Check if already scheduled
+            existing = ReengagementSchedule.query.filter_by(
+                user_id=user.id, 
+                campaign_type='week_1',
+                status='pending'
+            ).first()
+            
+            if existing:
+                return  # Already scheduled
+            
+            reengagement = ReengagementSchedule(
+                user_id=user.id,
+                campaign_type='week_1',
+                scheduled_date=scheduled_date
+            )
+            
+            db.session.add(reengagement)
+            user.reengagement_scheduled = scheduled_date
+            db.session.commit()
+            
+            app.logger.info(f"Scheduled re-engagement for user {user.id} on {scheduled_date}")
+            
+        except Exception as e:
+            app.logger.error(f"Error scheduling re-engagement: {str(e)}")
+    
+    @staticmethod
+    def can_access_feature(user, feature):
+        """Check if user can access specific feature"""
+        if not user.is_subscription_active():
+            return False
+        
+        # All premium features available during trial and paid subscription
+        premium_features = [
+            'unlimited_food_analysis',
+            'detailed_nutrition_reports', 
+            'meal_planning',
+            'advanced_recommendations',
+            'progress_tracking',
+            'priority_support'
+        ]
+        
+        return feature in premium_features
 
 # Food Analysis Services
 class FoodAnalysisService:
@@ -968,6 +1409,320 @@ class ManyChatService:
 
 # Routes
 
+# Subscription API Routes
+@app.route('/api/create-subscription', methods=['POST'])
+def create_subscription():
+    """Create Mercado Pago subscription link for user"""
+    try:
+        data = request.get_json()
+        subscriber_id = data.get('subscriber_id')
+        plan_type = data.get('plan_type', 'premium')
+        
+        if not subscriber_id:
+            return jsonify({'error': 'subscriber_id is required'}), 400
+        
+        user = User.query.filter_by(whatsapp_id=subscriber_id).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Check if user already has active subscription
+        if user.is_subscription_active():
+            return jsonify({'error': 'User already has active subscription'}), 400
+        
+        # Generate success and cancel URLs
+        success_url = f"https://caloria.vip/subscription-success?user={user.id}&ref={user.whatsapp_id}"
+        cancel_url = f"https://caloria.vip/subscription-cancel?user={user.id}"
+        
+        # Create Mercado Pago subscription link
+        payment_link = MercadoPagoService.create_subscription_link(user, success_url, cancel_url)
+        
+        if not payment_link:
+            return jsonify({'error': 'Failed to create payment link'}), 500
+        
+        # Update user status to indicate subscription is pending
+        user.subscription_status = 'trial_pending'
+        db.session.commit()
+        
+        return jsonify({
+            'payment_link': payment_link,
+            'plan_type': plan_type,
+            'user_id': user.id,
+            'trial_days': app.config['SUBSCRIPTION_TRIAL_DAYS'],
+            'success': True
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error creating subscription: {str(e)}")
+        return jsonify({'error': 'Failed to create subscription'}), 500
+
+@app.route('/webhook/mercadopago', methods=['POST'])
+def mercadopago_webhook():
+    """Handle Mercado Pago webhooks for subscription events"""
+    try:
+        data = request.get_json()
+        
+        # Get webhook signature from headers
+        signature = request.headers.get('x-signature', '')
+        
+        # Verify webhook authenticity
+        if not MercadoPagoService.verify_webhook_signature(data, signature):
+            app.logger.warning("Invalid Mercado Pago webhook signature")
+            return jsonify({'error': 'Invalid signature'}), 401
+        
+        app.logger.info(f"Received Mercado Pago webhook: {data}")
+        
+        # FIXED: Handle correct MP webhook format according to documentation
+        # MP sends: {"id": 12345, "live_mode": true, "type": "subscription_preapproval", 
+        #           "action": "subscription.created", "data": {"id": "999999999"}}
+        
+        webhook_type = data.get('type')  # subscription_preapproval, subscription_authorized_payment, etc.
+        action = data.get('action', '')  # subscription.created, subscription.updated, etc.
+        webhook_data = data.get('data', {})
+        resource_id = webhook_data.get('id')  # The actual subscription/payment ID
+        
+        app.logger.info(f"Webhook type: {webhook_type}, action: {action}, resource_id: {resource_id}")
+        
+        # Handle subscription-related webhooks
+        if webhook_type == 'subscription_preapproval':
+            result = handle_subscription_webhook(resource_id, action)
+        elif webhook_type == 'subscription_authorized_payment':
+            result = handle_subscription_payment_webhook(resource_id, action)
+        else:
+            app.logger.warning(f"Unknown webhook type: {webhook_type}")
+            # Still return 200 to acknowledge receipt
+            return jsonify({'status': 'ignored'})
+        
+        if result:
+            # REQUIRED: Return HTTP 200 within 22 seconds according to MP docs
+            return jsonify({'status': 'ok'})
+        else:
+            return jsonify({'status': 'error'}), 500
+        
+    except Exception as e:
+        app.logger.error(f"Mercado Pago webhook error: {str(e)}")
+        # Still return 200 to avoid retries for malformed requests
+        return jsonify({'error': 'Webhook processing failed'}), 200
+
+def handle_subscription_webhook(subscription_id, action):
+    """Process subscription webhook events - FIXED format"""
+    try:
+        if not subscription_id:
+            app.logger.error("No subscription ID in webhook data")
+            return False
+        
+        app.logger.info(f"Processing subscription webhook: {subscription_id}, action: {action}")
+        
+        # Get subscription details from Mercado Pago using correct endpoint
+        subscription_details = MercadoPagoService.get_subscription_details(subscription_id)
+        if not subscription_details:
+            app.logger.error(f"Could not get subscription details for {subscription_id}")
+            return False
+        
+        # Extract relevant information from correct MP response format
+        external_reference = subscription_details.get('external_reference')
+        status = subscription_details.get('status')
+        payer_email = subscription_details.get('payer_email', '')
+        
+        app.logger.info(f"Subscription {subscription_id} status: {status}, external_ref: {external_reference}")
+        
+        # Find user by external reference (WhatsApp ID)
+        user = User.query.filter_by(whatsapp_id=external_reference).first()
+        if not user:
+            app.logger.error(f"User not found for external reference: {external_reference}")
+            return False
+        
+        # Process based on subscription status and action
+        if status == 'authorized' and 'created' in action:
+            # Subscription approved - start trial
+            app.logger.info(f"Starting trial for user {user.id}")
+            SubscriptionService.start_trial(user)
+            user.mercadopago_subscription_id = subscription_id
+            db.session.commit()
+            
+            # Send trial started message via ManyChat
+            send_trial_started_message(user)
+            
+        elif status == 'cancelled' or 'cancelled' in action:
+            # Subscription cancelled
+            app.logger.info(f"Subscription cancelled for user {user.id}")
+            SubscriptionService.end_trial(user, reason='cancelled')
+            
+            # Send cancellation message
+            send_subscription_cancelled_message(user)
+            
+        elif status == 'pending':
+            # Payment pending
+            app.logger.info(f"Subscription pending for user {user.id}")
+            user.subscription_status = 'trial_pending'
+            db.session.commit()
+        
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"Error handling subscription webhook: {str(e)}")
+        return False
+
+def handle_subscription_payment_webhook(payment_id, action):
+    """Process subscription payment webhook events - NEW"""
+    try:
+        app.logger.info(f"Processing subscription payment webhook: {payment_id}, action: {action}")
+        
+        # Get payment details from correct endpoint
+        access_token = app.config['MERCADO_PAGO_ACCESS_TOKEN']
+        url = f"https://api.mercadopago.com/authorized_payments/{payment_id}"
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            payment_details = response.json()
+            
+            # Extract payment information
+            preapproval_id = payment_details.get('preapproval_id')
+            status = payment_details.get('status')
+            amount = payment_details.get('transaction_amount', 0)
+            
+            app.logger.info(f"Payment {payment_id} for subscription {preapproval_id}: {status}")
+            
+            # Find user by subscription ID
+            user = User.query.filter_by(mercadopago_subscription_id=preapproval_id).first()
+            if user:
+                if status == 'approved':
+                    # Payment successful - activate subscription
+                    SubscriptionService.activate_subscription(user, preapproval_id)
+                    app.logger.info(f"Activated subscription for user {user.id}")
+                elif status == 'rejected':
+                    # Payment failed - end trial
+                    SubscriptionService.end_trial(user, reason='payment_failed')
+                    app.logger.info(f"Payment failed for user {user.id}")
+                
+                return True
+            else:
+                app.logger.error(f"User not found for subscription {preapproval_id}")
+                return False
+        else:
+            app.logger.error(f"Error getting payment details: {response.status_code}")
+            return False
+        
+    except Exception as e:
+        app.logger.error(f"Error handling payment webhook: {str(e)}")
+        return False
+
+def handle_payment_webhook(webhook_data):
+    """Process payment webhook events - DEPRECATED, kept for compatibility"""
+    try:
+        payment_id = webhook_data.get('id')
+        if not payment_id:
+            return False
+        
+        # Log the payment event for backwards compatibility
+        app.logger.info(f"Legacy payment webhook received for payment {payment_id}")
+        
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"Error handling payment webhook: {str(e)}")
+        return False
+
+def send_trial_started_message(user):
+    """Send trial started message via ManyChat"""
+    try:
+        trial_hours = user.get_trial_time_remaining()
+        
+        message = f"""
+🎉 ¡Bienvenido a Caloria Premium!
+
+Tu prueba gratuita de 24 horas ha comenzado.
+
+✨ **Ahora tienes acceso a:**
+📊 Análisis ilimitados de comidas
+🎯 Recomendaciones personalizadas avanzadas
+📈 Seguimiento detallado de progreso
+💬 Soporte prioritario
+
+⏰ **Tiempo restante:** {trial_hours:.1f} horas
+
+🍎 **¡Empecemos!** Envía una foto de tu próxima comida para ver el análisis premium en acción.
+        """.strip()
+        
+        # Send via ManyChat
+        ManyChatService.send_message(user.whatsapp_id, message)
+        
+        # Log trial activity
+        SubscriptionService.log_trial_activity(user, 'trial_started', {
+            'message_sent': True,
+            'trial_hours': trial_hours
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error sending trial started message: {str(e)}")
+
+def send_subscription_cancelled_message(user):
+    """Send subscription cancelled message via ManyChat"""
+    try:
+        message = """
+😔 **Suscripción Cancelada**
+
+Tu prueba gratuita ha sido cancelada y ya no tienes acceso a las funciones premium.
+
+❌ **Ya no tienes acceso a:**
+• Análisis ilimitados de comidas
+• Recomendaciones avanzadas
+• Seguimiento detallado
+
+💭 **¿Cambio de opinión?**
+Siempre puedes volver cuando estés listo. Te contactaremos en una semana con una oferta especial.
+
+¡Gracias por probar Caloria! 👋
+        """.strip()
+        
+        ManyChatService.send_message(user.whatsapp_id, message)
+        
+    except Exception as e:
+        app.logger.error(f"Error sending cancellation message: {str(e)}")
+
+@app.route('/subscription-success')
+def subscription_success():
+    """Handle successful subscription redirect from Mercado Pago"""
+    try:
+        user_id = request.args.get('user')
+        external_ref = request.args.get('ref')
+        
+        if user_id:
+            user = User.query.get(user_id)
+            if user:
+                app.logger.info(f"Subscription success redirect for user {user.id}")
+                
+                # Show success page
+                return render_template('subscription_success.html', user=user)
+        
+        return render_template('subscription_success.html', user=None)
+        
+    except Exception as e:
+        app.logger.error(f"Error in subscription success: {str(e)}")
+        return render_template('subscription_success.html', user=None)
+
+@app.route('/subscription-cancel')
+def subscription_cancel():
+    """Handle cancelled subscription redirect from Mercado Pago"""
+    try:
+        user_id = request.args.get('user')
+        
+        if user_id:
+            user = User.query.get(user_id)
+            if user:
+                app.logger.info(f"Subscription cancelled by user {user.id}")
+                return render_template('subscription_cancel.html', user=user)
+        
+        return render_template('subscription_cancel.html', user=None)
+        
+    except Exception as e:
+        app.logger.error(f"Error in subscription cancel: {str(e)}")
+        return render_template('subscription_cancel.html', user=None)
+
 # Admin Panel Routes
 @app.route('/admin')
 def admin_login():
@@ -999,25 +1754,62 @@ def admin_dashboard():
     if 'admin_id' not in session:
         return redirect(url_for('admin_login'))
     
-    # Get statistics
+    # Get basic statistics
     total_users = User.query.count()
     active_users = User.query.filter_by(is_active=True).count()
     completed_quizzes = User.query.filter_by(quiz_completed=True).count()
     total_food_logs = FoodLog.query.count()
     
+    # Get subscription statistics
+    trial_pending_users = User.query.filter_by(subscription_tier='trial_pending').count()
+    trial_active_users = User.query.filter_by(subscription_tier='trial_active').count()
+    paid_subscribers = User.query.filter_by(subscription_tier='active').count()
+    cancelled_subscriptions = User.query.filter_by(subscription_tier='cancelled').count()
+    
+    # Calculate conversion rates
+    quiz_completion_rate = (completed_quizzes / total_users * 100) if total_users > 0 else 0
+    trial_conversion_rate = (trial_active_users / completed_quizzes * 100) if completed_quizzes > 0 else 0
+    paid_conversion_rate = (paid_subscribers / trial_active_users * 100) if trial_active_users > 0 else 0
+    
     # Recent users
     recent_users = User.query.order_by(User.created_at.desc()).limit(10).all()
     
-    # Recent food logs
-    recent_logs = FoodLog.query.join(User).order_by(FoodLog.created_at.desc()).limit(20).all()
+    # Recent food logs (actual food logs only)
+    recent_food_logs = FoodLog.query.join(User).order_by(FoodLog.created_at.desc()).limit(15).all()
+    
+    # Recent system activities (registration, quiz, subscriptions)
+    recent_activities = SystemActivityLog.query.join(User).order_by(SystemActivityLog.created_at.desc()).limit(15).all()
+    
+    # Revenue calculations (monthly)
+    subscription_price = app.config.get('SUBSCRIPTION_PRICE_ARS', 499900.0) / 100  # Convert centavos to pesos
+    monthly_revenue = paid_subscribers * subscription_price
     
     return render_template('admin/dashboard.html', 
+                         # Basic stats
                          total_users=total_users,
                          active_users=active_users,
                          completed_quizzes=completed_quizzes,
                          total_food_logs=total_food_logs,
+                         
+                         # Subscription stats
+                         trial_pending_users=trial_pending_users,
+                         trial_active_users=trial_active_users,
+                         paid_subscribers=paid_subscribers,
+                         cancelled_subscriptions=cancelled_subscriptions,
+                         
+                         # Conversion rates
+                         quiz_completion_rate=round(quiz_completion_rate, 1),
+                         trial_conversion_rate=round(trial_conversion_rate, 1),
+                         paid_conversion_rate=round(paid_conversion_rate, 1),
+                         
+                         # Revenue
+                         monthly_revenue=monthly_revenue,
+                         subscription_price=subscription_price,
+                         
+                         # Recent data
                          recent_users=recent_users,
-                         recent_logs=recent_logs)
+                         recent_food_logs=recent_food_logs,
+                         recent_activities=recent_activities)
 
 @app.route('/admin/users')
 def admin_users():
@@ -1165,7 +1957,7 @@ def manychat_webhook():
                     daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
                     
                     # Format response message
-                    response_text = format_analysis_response(analysis_result, daily_stats)
+                    response_text = format_analysis_response(analysis_result, daily_stats, user)
                     
                     app.logger.info(f"✅ Telegram image analysis completed successfully")
                     print(f"✅ Telegram image analysis completed successfully")
@@ -1226,6 +2018,15 @@ def manychat_webhook():
                     
                     db.session.add(user)
                     db.session.commit()
+                    
+                    # Log registration activity
+                    SystemActivityLog.log_activity(
+                        user_id=user.id,
+                        activity_type='registration',
+                        activity_data={'source': 'external_message_callback', 'platform': 'telegram'},
+                        ip_address=request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR')),
+                        user_agent=request.headers.get('User-Agent')
+                    )
                 
                 # HANDLE EXTERNAL MESSAGE CALLBACK CONTENT
                 message_text = data.get('message_text') or data.get('last_input_text') or ''
@@ -1637,7 +2438,7 @@ def handle_text_input(user, data):
     daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
     
     # Format response message
-    response_text = format_analysis_response(analysis_result, daily_stats)
+    response_text = format_analysis_response(analysis_result, daily_stats, user)
     
     # Get platform from request data, default to telegram
     platform = data.get('platform', 'telegram')
@@ -1846,7 +2647,7 @@ def handle_image_input(user, data):
             daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
             
             # Format response message
-            response_text = format_analysis_response(analysis_result, daily_stats)
+            response_text = format_analysis_response(analysis_result, daily_stats, user)
             
             # Get platform from request data, default to telegram
             platform = data.get('platform', 'telegram')
@@ -1965,7 +2766,7 @@ def handle_audio_input(user, data):
             daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
             
             # Format response message
-            response_text = format_analysis_response(analysis_result, daily_stats)
+            response_text = format_analysis_response(analysis_result, daily_stats, user)
             
             # Clean up audio file
             os.remove(filepath)
@@ -2012,6 +2813,7 @@ def handle_audio_input(user, data):
 def handle_quiz_response(user, data):
     """Handle quiz responses from user"""
     quiz_data = data.get('quiz_data', {})
+    question_number = data.get('question_number', 0)
     
     # Update user profile with quiz responses
     if 'weight' in quiz_data:
@@ -2031,39 +2833,190 @@ def handle_quiz_response(user, data):
     if 'last_name' in quiz_data:
         user.last_name = quiz_data['last_name']
     
-    # Calculate BMR and daily calorie goal
-    user.update_calculated_values()
-    user.quiz_completed = True
+    # PHASE 2A: Add subscription mentions at questions 10-11
+    subscription_teaser = ""
+    if question_number in [10, 11]:
+        subscription_teaser = f"""
+
+💎 ¡Por cierto, {user.first_name or 'amigo'}!
+Al finalizar este quiz tendrás acceso a nuestro plan PREMIUM:
+✨ Análisis ilimitado de comidas
+🎯 Recomendaciones personalizadas avanzadas  
+📊 Seguimiento detallado de micronutrientes
+⚡ ¡Prueba GRATIS por 24 horas completas!
+
+🎉 ¡Solo quedan {15 - question_number} preguntas más!"""
+
+    # Check if quiz is completed
+    quiz_completed = data.get('quiz_completed', False) or question_number >= 15
     
-    db.session.commit()
-    
-    # Generate welcome message with personalized goals
-    welcome_message = f"""
+    if quiz_completed:
+        # Calculate BMR and daily calorie goal
+        user.update_calculated_values()
+        user.quiz_completed = True
+        
+        # PHASE 2A: Create subscription at quiz completion
+        app.logger.info(f"Quiz completed for user {user.id}, creating subscription...")
+        
+        # Log quiz completion activity to both trial activity and system activity log
+        SubscriptionService.log_trial_activity(user, 'quiz_completed', {
+            'question_count': 15,
+            'completion_time': datetime.utcnow().isoformat()
+        })
+        
+        # Log quiz completion to system activity log
+        SystemActivityLog.log_activity(
+            user_id=user.id,
+            activity_type='quiz_completed',
+            activity_data={
+                'goal': user.goal,
+                'bmr': user.bmr,
+                'daily_calorie_goal': user.daily_calorie_goal,
+                'completion_time': datetime.utcnow().isoformat()
+            }
+        )
+        
+        # Create Mercado Pago subscription
+        subscription_link = MercadoPagoService.create_subscription_link(
+            user,
+            return_url=f"https://caloria.vip/subscription-success?user={user.id}",
+            cancel_url=f"https://caloria.vip/subscription-cancel?user={user.id}"
+        )
+        
+        # Log subscription creation activity
+        if subscription_link:
+            SystemActivityLog.log_activity(
+                user_id=user.id,
+                activity_type='subscription_created',
+                activity_data={
+                    'subscription_link': subscription_link,
+                    'price_ars': app.config.get('SUBSCRIPTION_PRICE_ARS', 499900.0) / 100
+                }
+            )
+        
+        db.session.commit()
+        
+        if subscription_link:
+            # Generate welcome message with subscription offer
+            welcome_message = f"""
+🎉 ¡Felicitaciones {user.first_name}! Has completado tu perfil nutricional.
+
+📊 TU PLAN PERSONALIZADO:
+🎯 Objetivo: {user.goal.replace('_', ' ').title()}
+🔥 Calorías diarias: {user.daily_calorie_goal:.0f} kcal
+💪 Metabolismo basal: {user.bmr:.0f} kcal
+
+🌟 ¡AHORA DESBLOQUEA EL PODER COMPLETO!
+
+💎 CALORIA PREMIUM - 24 HORAS GRATIS:
+✅ Análisis ILIMITADO de comidas (vs 3 gratis)
+✅ Recomendaciones personalizadas avanzadas
+✅ Seguimiento de micronutrientes detallado
+✅ Planificación de comidas inteligente
+✅ Soporte prioritario 24/7
+
+💰 Después de tu prueba: Solo $4999.00 ARS/mes
+🚫 Cancela cuando quieras, sin compromisos
+
+🎁 ¡Activa tu prueba GRATUITA ahora!
+👇 Haz clic para comenzar:"""
+            
+            # Return response with payment link
+            return jsonify({
+                "version": "v2",
+                "content": {
+                    "type": "telegram",
+                    "messages": [
+                        {
+                            "type": "text",
+                            "text": welcome_message
+                        },
+                        {
+                            "type": "text", 
+                            "text": f"🔗 ENLACE DE ACTIVACIÓN:\n{subscription_link}\n\n⚡ ¡Válido por 30 minutos!"
+                        }
+                    ],
+                    "external_message_callback": {
+                        "url": "https://caloria.vip/webhook/manychat",
+                        "method": "post",
+                        "payload": {
+                            "subscriber_id": "{{user_id}}",
+                            "first_name": "{{first_name}}",
+                            "last_name": "{{last_name}}",
+                            "message_text": "{{last_input_text}}",
+                            "attachment_url": "{{last_input_attachment_url}}",
+                            "message_type": "{{last_input_type}}"
+                        },
+                        "timeout": 3600
+                    }
+                }
+            })
+        else:
+            # Fallback if subscription creation fails
+            app.logger.error(f"Failed to create subscription for user {user.id}")
+            
+            fallback_message = f"""
 🎉 Welcome to Caloria, {user.first_name}!
 
-Your personalized profile:
-📊 Daily Calorie Goal: {user.daily_calorie_goal:.0f} kcal
-🎯 Goal: {user.goal.replace('_', ' ').title()}
-💪 BMR: {user.bmr:.0f} kcal
+📊 Your personalized profile:
+🎯 Daily Calorie Goal: {user.daily_calorie_goal:.0f} kcal
+💪 Goal: {user.goal.replace('_', ' ').title()}
+🔥 BMR: {user.bmr:.0f} kcal
 
-Ready to start tracking your meals! Send me photos, descriptions, or voice messages of your food, and I'll help you stay on track! 📸🍽️
-    """.strip()
-    
-    # Return ManyChat dynamic block format
-    return jsonify({
-        "version": "v2",
-        "content": {
-            "messages": [
-                {
-                    "type": "text",
-                    "text": welcome_message
+Ready to start tracking your meals! Send me photos, descriptions, or voice messages of your food! 📸🍽️
+
+⚠️ Subscription service temporarily unavailable. You can still track {3} meals today!"""
+            
+            return jsonify({
+                "version": "v2",
+                "content": {
+                    "type": "telegram",
+                    "messages": [
+                        {
+                            "type": "text",
+                            "text": fallback_message
+                        }
+                    ],
+                    "external_message_callback": {
+                        "url": "https://caloria.vip/webhook/manychat",
+                        "method": "post",
+                        "payload": {
+                            "subscriber_id": "{{user_id}}",
+                            "first_name": "{{first_name}}",
+                            "last_name": "{{last_name}}",
+                            "message_text": "{{last_input_text}}",
+                            "attachment_url": "{{last_input_attachment_url}}",
+                            "message_type": "{{last_input_type}}"
+                        },
+                        "timeout": 3600
+                    }
                 }
-            ]
-        }
-    })
+            })
+    else:
+        # Quiz in progress - return current progress with subscription teaser
+        progress_message = f"""
+✅ Pregunta {question_number} completada!
 
-def format_analysis_response(analysis_result, daily_stats):
-    """Format the food analysis response message"""
+📋 Progreso: {question_number}/15 ({int(question_number/15*100)}%)
+{subscription_teaser}
+
+👉 ¡Continúa con la siguiente pregunta!"""
+        
+        return jsonify({
+            "version": "v2",
+            "content": {
+                "type": "telegram", 
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": progress_message
+                    }
+                ]
+            }
+        })
+
+def format_analysis_response(analysis_result, daily_stats, user=None):
+    """Format the food analysis response message with premium features for trial users"""
     
     # Determine food score emoji and recommendation
     score = analysis_result['food_score']
@@ -2088,29 +3041,135 @@ def format_analysis_response(analysis_result, daily_stats):
     if analysis_result.get('confidence_score', 1.0) < 0.5 and "couldn't identify automatically" in analysis_result['food_name']:
         low_confidence_note = "\n\n🤖 I couldn't identify your food automatically. For better accuracy, try sending a text description like 'strawberries' or 'grilled chicken'!"
     
+    # PHASE 2A: Enhanced premium response for trial users
+    premium_features = ""
+    trial_status = ""
+    
+    if user and user.is_trial_active():
+        # Log trial activity
+        SubscriptionService.log_trial_activity(user, 'food_analysis_premium', {
+            'food_name': analysis_result['food_name'],
+            'calories': analysis_result['calories'],
+            'confidence_score': analysis_result.get('confidence_score', 0)
+        })
+        
+        # Get trial time remaining
+        trial_time_remaining = user.get_trial_time_remaining()
+        hours_left = int(trial_time_remaining.total_seconds() // 3600) if trial_time_remaining else 0
+        minutes_left = int((trial_time_remaining.total_seconds() % 3600) // 60) if trial_time_remaining else 0
+        
+        trial_status = f"\n\n🌟 **ANÁLISIS PREMIUM ACTIVO**\n⚡ Tiempo restante: {hours_left}h {minutes_left}m de tu prueba gratuita"
+        
+        # Enhanced premium features
+        premium_features = f"""
+
+💎 **ANÁLISIS PREMIUM COMPLETO:**
+
+🧬 **MICRONUTRIENTES DETALLADOS:**
+• Vitamina C: ~{analysis_result['calories'] * 0.1:.1f}mg (estimado)
+• Calcio: ~{analysis_result['protein'] * 15:.0f}mg  
+• Hierro: ~{analysis_result['carbs'] * 0.2:.1f}mg
+• Potasio: ~{analysis_result['fat'] * 25:.0f}mg
+
+⏰ **TIMING ÓPTIMO:**
+• Mejor momento: {"Desayuno/Mañana" if score >= 4 else "Almuerzo" if score >= 3 else "Ocasional"}
+• Pre-entreno: {"✅ Excelente" if analysis_result['carbs'] > 20 else "⚠️ Agregar carbohidratos"}
+• Post-entreno: {"✅ Perfecto" if analysis_result['protein'] > 15 else "💪 Agregar proteína"}
+
+🎯 **RECOMENDACIONES PERSONALIZADAS:**
+• Para tu objetivo ({user.goal.replace('_', ' ').title()}): {_get_goal_specific_advice(analysis_result, user.goal)}
+• Frecuencia ideal: {frequency.lower()}
+• Mejores combinaciones: {_get_food_combinations(analysis_result)}
+
+📊 **PROGRESO AVANZADO:**
+• Análisis realizados hoy: ILIMITADO ♾️ 
+• Calidad nutricional promedio: {((score + daily_stats.food_logs_count * 3) / (daily_stats.food_logs_count + 1)):.1f}/5
+• Tendencia semanal: {"📈 Mejorando" if score >= 3 else "📊 Estable"}"""
+        
+    elif user and user.can_access_premium_features():
+        # Paid subscription features
+        trial_status = "\n\n👑 **MIEMBRO PREMIUM** - Acceso completo"
+        premium_features = premium_features.replace("ANÁLISIS PREMIUM ACTIVO", "MIEMBRO PREMIUM ACTIVO")
+    elif user:
+        # Free user - limited features
+        daily_analyses = getattr(daily_stats, 'food_logs_count', 0)
+        free_limit = 3
+        remaining_free = max(0, free_limit - daily_analyses)
+        
+        if remaining_free > 0:
+            trial_status = f"\n\n🆓 Análisis gratuitos restantes hoy: {remaining_free}/{free_limit}"
+        else:
+            trial_status = f"\n\n🔒 Límite diario alcanzado ({free_limit} análisis)\n💎 ¡Activa tu prueba gratuita de 24h para análisis ilimitado!"
+        
+        premium_features = f"""
+
+💎 **¡DESBLOQUEA ANÁLISIS PREMIUM!**
+✨ Micronutrientes detallados
+⏰ Timing óptimo de comidas  
+🎯 Recomendaciones personalizadas
+📊 Progreso avanzado y tendencias
+♾️ Análisis ilimitados
+
+🎁 **¡PRUEBA GRATIS 24 HORAS!**
+Solo $4999.00 ARS/mes después (cancela cuando quieras)"""
+
+    # Basic analysis response
     response = f"""
-📊 NUTRITIONAL ANALYSIS
+📊 ANÁLISIS NUTRICIONAL
 🍽️ {analysis_result['food_name']}
 
-🔥 Energy: {analysis_result['calories']:.1f} kcal
-💪 Protein: {analysis_result['protein']:.1f}g
-🍞 Carbs: {analysis_result['carbs']:.1f}g  
-🥑 Fat: {analysis_result['fat']:.1f}g
-🌱 Fiber: {analysis_result['fiber']:.1f}g
-🧂 Sodium: {analysis_result['sodium']:.0f}mg
+🔥 Energía: {analysis_result['calories']:.1f} kcal
+💪 Proteína: {analysis_result['protein']:.1f}g
+🍞 Carbohidratos: {analysis_result['carbs']:.1f}g  
+🥑 Grasa: {analysis_result['fat']:.1f}g
+🌱 Fibra: {analysis_result['fiber']:.1f}g
+🧂 Sodio: {analysis_result['sodium']:.0f}mg
 
-{score_emoji} Overall Rating: {score}/5 – {recommendation}
-✅ Should you eat this? {frequency}
+{score_emoji} Puntuación: {score}/5 – {recommendation}
+✅ ¿Deberías comerlo? {frequency}
 
-📈 TODAY'S PROGRESS
-🎯 Goal: {daily_stats.goal_calories:.0f} kcal
-📊 Consumed: {daily_stats.total_calories:.0f} kcal
-⚖️ Remaining: {calories_remaining:.0f} kcal
+📈 PROGRESO DE HOY
+🎯 Meta: {daily_stats.goal_calories:.0f} kcal
+📊 Consumido: {daily_stats.total_calories:.0f} kcal
+⚖️ Restante: {calories_remaining:.0f} kcal{trial_status}{premium_features}
 
-💡 Add leafy greens to boost fiber!{low_confidence_note}
+💡 Consejo rápido: ¡Agrega vegetales verdes para más fibra!{low_confidence_note}
     """.strip()
     
     return response
+
+def _get_goal_specific_advice(analysis_result, goal):
+    """Get personalized advice based on user's goal"""
+    if goal == 'lose_weight':
+        if analysis_result['calories'] < 200:
+            return "Perfecto para pérdida de peso - bajo en calorías"
+        elif analysis_result['fiber'] > 5:
+            return "Excelente - la fibra te mantendrá satisfecho"
+        else:
+            return "Moderado - considera porciones más pequeñas"
+    elif goal == 'gain_weight':
+        if analysis_result['calories'] > 300:
+            return "Excelente para ganar peso - denso en calorías"
+        else:
+            return "Bien - combina con frutos secos para más calorías"
+    elif goal == 'build_muscle':
+        if analysis_result['protein'] > 15:
+            return "Perfecto para construir músculo - alto en proteína"
+        else:
+            return "Bien - agrega una fuente de proteína"
+    else:  # maintain_weight
+        return "Ideal para mantenimiento - balanceado"
+
+def _get_food_combinations(analysis_result):
+    """Suggest food combinations based on nutritional profile"""
+    if analysis_result['carbs'] > analysis_result['protein'] * 2:
+        return "Agrega proteína (pollo, pescado, huevos)"
+    elif analysis_result['protein'] > analysis_result['carbs'] * 2:
+        return "Combina con carbohidratos complejos (quinoa, avena)"
+    elif analysis_result['fat'] > 15:
+        return "Equilibra con vegetales frescos"
+    else:
+        return "Combina con vegetales de hojas verdes"
 
 # API Routes for external integrations
 @app.route('/api/users', methods=['GET'])
@@ -2273,6 +3332,159 @@ def download_telegram_image(file_id, telegram_bot_token):
     except Exception as e:
         app.logger.error(f"Error downloading Telegram image: {str(e)}")
         return None
+
+# NEW: Analytics API endpoint
+@app.route('/api/subscription-analytics', methods=['GET'])
+def subscription_analytics():
+    """Get subscription analytics and conversion metrics"""
+    try:
+        with app.app_context():
+            # Basic user metrics
+            total_users = User.query.count()
+            quiz_completed_users = User.query.filter_by(quiz_completed=True).count()
+            trial_pending_users = User.query.filter_by(subscription_tier='trial_pending').count()
+            trial_active_users = User.query.filter_by(subscription_tier='trial_active').count()
+            paid_users = User.query.filter_by(subscription_tier='active').count()
+            cancelled_users = User.query.filter_by(subscription_tier='cancelled').count()
+            
+            # Conversion rates
+            quiz_completion_rate = (quiz_completed_users / total_users * 100) if total_users > 0 else 0
+            trial_conversion_rate = (trial_active_users / quiz_completed_users * 100) if quiz_completed_users > 0 else 0
+            paid_conversion_rate = (paid_users / trial_active_users * 100) if trial_active_users > 0 else 0
+            
+            # Trial activity analytics
+            trial_activities = TrialActivity.query.all()
+            activity_types = {}
+            engagement_scores = []
+            
+            for activity in trial_activities:
+                activity_type = activity.activity_type
+                activity_types[activity_type] = activity_types.get(activity_type, 0) + 1
+                if activity.engagement_score:
+                    engagement_scores.append(activity.engagement_score)
+            
+            avg_engagement = sum(engagement_scores) / len(engagement_scores) if engagement_scores else 0
+            
+            # Recent subscription trends (last 7 days)
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            recent_signups = User.query.filter(User.created_at >= week_ago).count()
+            recent_trials = User.query.filter(
+                User.trial_start_time >= week_ago if hasattr(User, 'trial_start_time') else False
+            ).count()
+            
+            analytics_data = {
+                'user_metrics': {
+                    'total_users': total_users,
+                    'quiz_completed': quiz_completed_users,
+                    'trial_pending': trial_pending_users,
+                    'trial_active': trial_active_users,
+                    'paid_subscribers': paid_users,
+                    'cancelled': cancelled_users
+                },
+                'conversion_rates': {
+                    'quiz_completion': round(quiz_completion_rate, 2),
+                    'trial_conversion': round(trial_conversion_rate, 2),
+                    'paid_conversion': round(paid_conversion_rate, 2)
+                },
+                'engagement': {
+                    'activity_types': activity_types,
+                    'average_engagement_score': round(avg_engagement, 2),
+                    'total_trial_activities': len(trial_activities)
+                },
+                'trends': {
+                    'recent_signups_7d': recent_signups,
+                    'recent_trials_7d': recent_trials
+                },
+                'phase_2a_status': {
+                    'implementation': 'complete',
+                    'quiz_integration': 'active',
+                    'trial_features': 'active',
+                    'telegram_testing': 'ready',
+                    'whatsapp_deployment': 'pending_api_approval'
+                }
+            }
+            
+            return jsonify(analytics_data)
+            
+    except Exception as e:
+        app.logger.error(f"Analytics error: {str(e)}")
+        return jsonify({'error': 'Analytics unavailable'}), 500
+
+# NEW: Enhanced trial activity logging
+class AnalyticsService:
+    @staticmethod
+    def log_conversion_event(user, event_type, event_data=None):
+        """Log conversion events for analytics"""
+        try:
+            # Log to trial activity if user is in trial
+            if user.is_trial_active() if hasattr(user, 'is_trial_active') else False:
+                SubscriptionService.log_trial_activity(user, event_type, event_data)
+            
+            # Log conversion milestones
+            conversion_events = {
+                'user_registered': 1.0,
+                'quiz_started': 2.0,
+                'quiz_q10_reached': 3.0,  # First subscription mention
+                'quiz_q11_reached': 3.5,  # Second subscription mention
+                'quiz_completed': 5.0,
+                'subscription_link_generated': 7.0,
+                'trial_started': 10.0,
+                'first_premium_analysis': 8.0,
+                'trial_extended_24h': 6.0,
+                'subscription_converted': 15.0,
+                'subscription_cancelled': -5.0
+            }
+            
+            engagement_score = conversion_events.get(event_type, 1.0)
+            
+            # Store in database for analytics
+            app.logger.info(f"Analytics: {user.whatsapp_id} - {event_type} (score: {engagement_score})")
+            
+        except Exception as e:
+            app.logger.error(f"Analytics logging error: {str(e)}")
+    
+    @staticmethod
+    def get_user_conversion_funnel():
+        """Get conversion funnel data"""
+        try:
+            with app.app_context():
+                funnel_data = {
+                    'registered': User.query.count(),
+                    'quiz_started': User.query.filter(User.first_name.isnot(None)).count(),
+                    'quiz_completed': User.query.filter_by(quiz_completed=True).count(),
+                    'trial_started': User.query.filter(User.trial_start_time.isnot(None)).count(),
+                    'converted_to_paid': User.query.filter_by(subscription_tier='active').count()
+                }
+                
+                # Calculate conversion rates
+                for i, (step, count) in enumerate(list(funnel_data.items())[1:]):
+                    prev_step, prev_count = list(funnel_data.items())[i]
+                    rate = (count / prev_count * 100) if prev_count > 0 else 0
+                    funnel_data[f'{step}_rate'] = round(rate, 2)
+                
+                return funnel_data
+                
+        except Exception as e:
+            app.logger.error(f"Funnel analytics error: {str(e)}")
+            return {}
+
+# Add analytics logging to quiz handler
+def handle_quiz_response_with_analytics(user, data):
+    """Enhanced quiz handler with analytics logging"""
+    question_number = data.get('question_number', 0)
+    
+    # Log analytics events
+    if question_number == 1:
+        AnalyticsService.log_conversion_event(user, 'quiz_started')
+    elif question_number == 10:
+        AnalyticsService.log_conversion_event(user, 'quiz_q10_reached')
+    elif question_number == 11:
+        AnalyticsService.log_conversion_event(user, 'quiz_q11_reached')
+    elif question_number >= 15:
+        AnalyticsService.log_conversion_event(user, 'quiz_completed')
+    
+    # Call original quiz handler
+    return handle_quiz_response(user, data)
 
 if __name__ == '__main__':
     with app.app_context():

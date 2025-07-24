@@ -27,11 +27,11 @@
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="h5 mb-0 font-weight-bold">{{ active_users }}</div>
-                        <div class="small">Active Users</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ paid_subscribers }}</div>
+                        <div class="small">Paid Subscribers</div>
                     </div>
                     <div class="col-auto">
-                        <i class="fas fa-user-check fa-2x"></i>
+                        <i class="fas fa-crown fa-2x"></i>
                     </div>
                 </div>
             </div>
@@ -43,11 +43,11 @@
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="h5 mb-0 font-weight-bold">{{ completed_quizzes }}</div>
-                        <div class="small">Completed Quizzes</div>
+                        <div class="h5 mb-0 font-weight-bold">{{ trial_active_users }}</div>
+                        <div class="small">Active Trials</div>
                     </div>
                     <div class="col-auto">
-                        <i class="fas fa-clipboard-check fa-2x"></i>
+                        <i class="fas fa-gem fa-2x"></i>
                     </div>
                 </div>
             </div>
@@ -59,12 +59,116 @@
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="h5 mb-0 font-weight-bold">{{ total_food_logs }}</div>
-                        <div class="small">Food Logs</div>
+                        <div class="h5 mb-0 font-weight-bold">${{ "%.0f"|format(monthly_revenue) }}</div>
+                        <div class="small">Monthly Revenue (ARS)</div>
                     </div>
                     <div class="col-auto">
-                        <i class="fas fa-utensils fa-2x"></i>
+                        <i class="fas fa-money-bill-wave fa-2x"></i>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subscription Analytics Row -->
+<div class="row mb-4">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Subscription Analytics
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Quiz Completion Rate</span>
+                                <strong>{{ quiz_completion_rate }}%</strong>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar bg-primary" style="width: {{ quiz_completion_rate }}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Trial Conversion</span>
+                                <strong>{{ trial_conversion_rate }}%</strong>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar bg-info" style="width: {{ trial_conversion_rate }}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Paid Conversion</span>
+                                <strong>{{ paid_conversion_rate }}%</strong>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar bg-success" style="width: {{ paid_conversion_rate }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="row text-center">
+                            <div class="col-6 mb-3">
+                                <div class="h4 mb-0 text-warning">{{ trial_pending_users }}</div>
+                                <small class="text-muted">Trial Pending</small>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="h4 mb-0 text-info">{{ trial_active_users }}</div>
+                                <small class="text-muted">Trial Active</small>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="h4 mb-0 text-success">{{ paid_subscribers }}</div>
+                                <small class="text-muted">Paid Subs</small>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="h4 mb-0 text-danger">{{ cancelled_subscriptions }}</div>
+                                <small class="text-muted">Cancelled</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-calculator me-2"></i>
+                    Quick Stats
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Total Users:</span>
+                    <strong>{{ total_users }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Quiz Completed:</span>
+                    <strong>{{ completed_quizzes }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Food Logs:</span>
+                    <strong>{{ total_food_logs }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Subscription Price:</span>
+                    <strong>${{ "%.2f"|format(subscription_price) }} ARS</strong>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span>Monthly Revenue:</span>
+                    <strong class="text-success">${{ "%.2f"|format(monthly_revenue) }} ARS</strong>
                 </div>
             </div>
         </div>
@@ -146,7 +250,7 @@
                 </h6>
             </div>
             <div class="card-body">
-                {% if recent_logs %}
+                {% if recent_food_logs %}
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
@@ -159,7 +263,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for log in recent_logs %}
+                                {% for log in recent_food_logs %}
                                 <tr>
                                     <td>
                                         <a href="{{ url_for('admin_user_detail', user_id=log.user_id) }}" 
@@ -198,6 +302,85 @@
                     <div class="text-center py-4">
                         <i class="fas fa-utensils fa-3x text-muted mb-3"></i>
                         <p class="text-muted">No food logs yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent System Activities -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-cog me-2"></i>
+                    Recent System Activities
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if recent_activities %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Activity</th>
+                                    <th>Details</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in recent_activities %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('admin_user_detail', user_id=activity.user_id) }}" 
+                                           class="text-decoration-none">
+                                            {{ activity.user.first_name or 'User' }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% if activity.activity_type == 'registration' %}
+                                            <span class="badge bg-success"><i class="fas fa-user-plus"></i> Registration</span>
+                                        {% elif activity.activity_type == 'quiz_completed' %}
+                                            <span class="badge bg-info"><i class="fas fa-check-circle"></i> Quiz Done</span>
+                                        {% elif activity.activity_type == 'subscription_created' %}
+                                            <span class="badge bg-warning"><i class="fas fa-credit-card"></i> Subscription</span>
+                                        {% elif activity.activity_type == 'trial_started' %}
+                                            <span class="badge bg-primary"><i class="fas fa-play"></i> Trial Start</span>
+                                        {% elif activity.activity_type == 'trial_ended' %}
+                                            <span class="badge bg-secondary"><i class="fas fa-stop"></i> Trial End</span>
+                                        {% elif activity.activity_type == 'subscription_cancelled' %}
+                                            <span class="badge bg-danger"><i class="fas fa-times"></i> Cancelled</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">{{ activity.activity_type.replace('_', ' ').title() }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if activity.activity_data %}
+                                                {% set data = activity.activity_data|from_json %}
+                                                {% if data.goal %}Goal: {{ data.goal.replace('_', ' ').title() }}{% endif %}
+                                                {% if data.completion_time %}Completed{% endif %}
+                                                {% if data.amount %}${{ data.amount }} ARS{% endif %}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ activity.created_at.strftime('%m/%d %H:%M') }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-cog fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No system activities yet</p>
                     </div>
                 {% endif %}
             </div>

@@ -9,6 +9,10 @@ import os
 import json
 import requests
 import logging
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
 from PIL import Image
 import io
 import base64

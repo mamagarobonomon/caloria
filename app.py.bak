@@ -57,7 +57,7 @@ from handlers.quiz_handlers import QuizHandler
 from middleware.error_handlers import ErrorHandler
 
 # Monitoring
-from monitoring.health_checks import HealthChecker, register_health_checks
+from monitoring.health_checks import HealthChecker
 
 # Initialize global services
 metrics_service = MetricsService()
@@ -1607,6 +1607,55 @@ def create_subscription():
     except Exception as e:
         app.logger.error(f"Error creating subscription: {str(e)}")
         return jsonify({'error': 'Failed to create subscription'}), 500
+
+@app.route('/webhook/mercadopago', methods=['POST'])
+def mercadopago_webhook():
+    """Handle Mercado Pago webhooks for subscription events"""
+    try:
+        data = request.get_json()
+        
+        # Get webhook signature from headers
+        signature = request.headers.get('x-signature', '')
+        
+        # Verify webhook authenticity
+        if not MercadoPagoService.verify_webhook_signature(data, signature):
+            app.logger.warning("Invalid Mercado Pago webhook signature")
+            return jsonify({'error': 'Invalid signature'}), 401
+        
+        app.logger.info(f"Received Mercado Pago webhook: {data}")
+        
+        # FIXED: Handle correct MP webhook format according to documentation
+        # MP sends: {"id": 12345, "live_mode": true, "type": "subscription_preapproval", 
+        #           "action": "subscription.created", "data": {"id": "999999999"}}
+        
+        webhook_type = data.get('type')  # subscription_preapproval, subscription_authorized_payment, etc.
+        action = data.get('action', '')  # subscription.created, subscription.updated, etc.
+        webhook_data = data.get('data', {})
+        resource_id = webhook_data.get('id')  # The actual subscription/payment ID
+        
+        app.logger.info(f"Webhook type: {webhook_type}, action: {action}, resource_id: {resource_id}")
+        
+        # Handle subscription-related webhooks
+        if webhook_type == 'subscription_preapproval':
+            result = handle_subscription_webhook(resource_id, action)
+        elif webhook_type == 'subscription_authorized_payment':
+            result = handle_subscription_payment_webhook(resource_id, action)
+        else:
+            app.logger.warning(f"Unknown webhook type: {webhook_type}")
+            # Still return 200 to acknowledge receipt
+            return jsonify({'status': 'ignored'})
+        
+        if result:
+            # REQUIRED: Return HTTP 200 within 22 seconds according to MP docs
+            return jsonify({'status': 'ok'})
+        else:
+            return jsonify({'status': 'error'}), 500
+        
+    except Exception as e:
+        app.logger.error(f"Mercado Pago webhook error: {str(e)}")
+        # Still return 200 to avoid retries for malformed requests
+        return jsonify({'error': 'Webhook processing failed'}), 200
+
 def handle_subscription_webhook(subscription_id, action):
     """Process subscription webhook events - FIXED format"""
     try:
@@ -1946,6 +1995,7 @@ def admin_user_detail(user_id):
 # ManyChat Webhook Routes
 @app.route('/webhook/manychat', methods=['POST'])
 @rate_limiting_service.limiter.limit("100 per minute")
+@handle_exceptions
 def manychat_webhook():
     """Handle incoming webhooks from ManyChat using modular handlers"""
     with LogTimer("manychat_webhook_processing"):
@@ -2012,6 +2062,7 @@ def manychat_webhook():
 # MercadoPago Webhook Routes
 @app.route('/webhook/mercadopago', methods=['POST'])
 @rate_limiting_service.limiter.limit("200 per minute")
+@handle_exceptions
 def mercadopago_webhook():
     """Handle Mercado Pago webhooks using modular handlers"""
     with LogTimer("mercadopago_webhook_processing"):
@@ -3171,7 +3222,7 @@ if __name__ == '__main__':
     
 # ===== NEW: Comprehensive Health Check Endpoints =====
 # Register all health check routes from the monitoring service
-register_health_checks(app, db)
+health_checker.register_health_checks(app)
 
 @app.route('/health/')
 def health_overview():

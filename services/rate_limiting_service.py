@@ -22,12 +22,12 @@ class RateLimitingService:
     def init_app(self, app):
         """Initialize rate limiting for Flask app"""
         self.limiter = Limiter(
-            app,
             key_func=self._get_rate_limit_key,
             default_limits=[AppConstants.DEFAULT_RATE_LIMIT],
             storage_uri="memory://",  # Use Redis in production
             strategy="fixed-window"
         )
+        self.limiter.init_app(app)
         
         # Custom error handler for rate limits
         @self.limiter.request_filter

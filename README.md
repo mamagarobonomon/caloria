@@ -61,7 +61,7 @@ Caloria now includes a premium subscription system powered by Mercado Pago:
 
 ### Prerequisites
 - Python 3.8+
-- PostgreSQL (optional, defaults to SQLite)
+- PostgreSQL (required for production, SQLite for local development)
 - Google Cloud account with Vision & Speech APIs enabled
 - ManyChat account
 - Spoonacular API key
@@ -93,6 +93,8 @@ export DATABASE_URL="postgresql://user:password@localhost/caloria"  # Optional
 python app.py
 ```
 
+**Note**: For local development, the application will automatically use SQLite. For production, ensure PostgreSQL is configured via `DATABASE_URL`.
+
 5. **Access the application**
 - Main page: http://localhost:5000
 - Admin panel: http://localhost:5000/admin
@@ -109,7 +111,9 @@ python app.py
 | `MANYCHAT_API_TOKEN` | WhatsApp integration token | Yes |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to Google Cloud service account JSON | Yes |
 | `GOOGLE_CLOUD_KEY_JSON` | Google Cloud service account JSON (alternative) | Yes* |
-| `DATABASE_URL` | PostgreSQL connection string | No |
+| `DATABASE_URL` | Database connection string (PostgreSQL for production, SQLite for development) | Yes* |
+
+*Required for production. Defaults to SQLite for local development.
 | `OPENAI_API_KEY` | OpenAI API for enhanced analysis | No |
 
 *Either `GOOGLE_APPLICATION_CREDENTIALS` or `GOOGLE_CLOUD_KEY_JSON` is required for Google Cloud APIs.

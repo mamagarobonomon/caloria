@@ -168,16 +168,44 @@ migrations/
 ## 🎯 **Next Steps**
 
 ### **For New Installations**
-1. Run `setup_mercadopago_env.py` first
-2. Run `migrate_subscription_db.py` for subscription features
-3. Run `migrate_admin_dashboard.py` for enhanced admin panel
+1. **Setup environment**: Run `setup_mercadopago_env.py` first
+2. **Database setup**: Configure PostgreSQL for production (see `DATABASE_CONFIGURATION_GUIDE.md`)
+3. **Subscription features**: Run `migrate_subscription_db.py`
+4. **Admin dashboard**: Run `migrate_admin_dashboard.py`
+5. **Create admin user**: Run `create_admin.py` if using PostgreSQL
 
 ### **For Future Migrations**
-- New migration scripts should be added to this folder
-- Update this README with new migration information
-- Follow the same naming pattern: `migrate_feature_name.py`
-- Include safety checks and backup functionality
+- **Environment**: Ensure PostgreSQL is configured for production
+- **Backups**: Always create backups before running migrations
+- **Testing**: Test with SQLite locally before PostgreSQL migration
+- **Admin users**: Remember to create admin users after database changes
+- **Health checks**: Use `/health/database` to verify migration success
+- **New scripts**: Add to this folder with pattern: `migrate_feature_name.py`
+- **Documentation**: Update this README and database configuration guide
 
 ---
 
-**✅ All current migrations have been successfully applied to the production database.** 
+## 🔄 **Database Migration to PostgreSQL - COMPLETED**
+
+### **✅ Production Database Migration Complete**
+- **Date**: July 24, 2025
+- **From**: SQLite (`caloria.db`)
+- **To**: PostgreSQL (`caloria_vip_db`)
+- **Status**: ✅ **Successfully migrated 3 users**
+
+### **🗄️ Current Database Status**
+- **Production**: PostgreSQL with automated backups
+- **Development**: SQLite (automatic)
+- **Admin Users**: Restored and functional
+- **Health Monitoring**: Active at `/health/database`
+
+### **🚨 Important Notes for Future Migrations**
+1. **Always backup before migrating**: Use `backup_script.sh`
+2. **Test migrations locally first**: Run with SQLite
+3. **Verify admin users exist**: Run `create_admin.py` if needed
+4. **Check environment loading**: Ensure `load_dotenv()` is called
+5. **Monitor health endpoints**: Use `/health/database` to verify
+
+---
+
+**✅ All current migrations have been successfully applied to the production PostgreSQL database.** 

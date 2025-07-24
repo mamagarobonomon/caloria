@@ -260,7 +260,9 @@ sudo lsof -i :5001
 
 Your bilingual WhatsApp nutrition bot is now live at:
 - **🌐 Website**: https://caloria.vip
-- **🔧 Admin**: https://caloria.vip/admin
+- **🔧 Admin**: https://caloria.vip/admin (admin/admin123)
+- **🗄️ Database**: PostgreSQL with daily backups
+- **🔍 Health**: https://caloria.vip/health/database
 - **🇪🇸 Default**: Spanish language
 - **🇺🇸 Switch**: English toggle available
 - **🔒 Secure**: SSL certificate installed

@@ -17,9 +17,11 @@ def create_env_file():
 SECRET_KEY={secret_key}
 FLASK_ENV=development
 
-# Database Configuration (optional, defaults to SQLite)
+# Database Configuration
+# Local development (default)
 DATABASE_URL=sqlite:///caloria.db
-# For PostgreSQL: postgresql://username:password@localhost:5432/caloria
+# Production (recommended)
+# DATABASE_URL=postgresql://username:password@localhost:5432/caloria
 
 # External API Keys
 SPOONACULAR_API_KEY={spoonacular_key}

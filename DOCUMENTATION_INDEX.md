@@ -11,6 +11,7 @@
 | [📘 Mercado Pago Integration Guide](./MERCADOPAGO_INTEGRATION_GUIDE.md) | **MAIN REFERENCE** - Complete MP integration details | ✅ Current |
 | [🚨 Mercado Pago Webhook Fixes](./MERCADOPAGO_WEBHOOK_FIXES.md) | Critical fixes based on MP documentation | ✅ Applied |
 | [🌐 Google Cloud Integration Guide](./GOOGLE_CLOUD_GUIDE.md) | **CONSOLIDATED** - Setup & migration guide | ✅ Current |
+| [🗄️ Database Configuration Guide](./DATABASE_CONFIGURATION_GUIDE.md) | **NEW** - Complete database setup & management | ✅ Current |
 | ~~Pre-Phase 2 Checklist~~ | ~~Tasks before Phase 2~~ | ✅ **COMPLETED & REMOVED** |
 | [📖 Project README](./README.md) | General project overview and setup | ✅ Current |
 | [🚀 Deployment Guide](./DEPLOYMENT_CONSOLIDATED.md) | Production deployment instructions | ✅ Current |

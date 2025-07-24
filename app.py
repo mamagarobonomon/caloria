@@ -27,6 +27,36 @@ except ImportError:
     # Note: app.logger will be available after Flask app is created
 
 app = Flask(__name__)
+
+# Validate environment before configuration
+def validate_environment():
+    """Validate required environment variables"""
+    required_vars = ['SECRET_KEY']
+    missing = []
+    
+    for var in required_vars:
+        if not os.environ.get(var):
+            missing.append(var)
+    
+    if missing:
+        print(f"⚠️ Missing environment variables: {missing}")
+    
+    # Check database configuration
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        print("⚠️ DATABASE_URL not set, using SQLite fallback")
+    else:
+        print(f"📊 Database configured: {db_url.split('://')[0].upper()}")
+    
+    # Validate production environment
+    if os.environ.get('FLASK_ENV') == 'production' and db_url and 'sqlite' in db_url:
+        print("🚨 WARNING: SQLite not recommended for production environment")
+    
+    return True
+
+# Validate environment
+validate_environment()
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'caloria-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///caloria.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -50,6 +80,36 @@ app.config['SUBSCRIPTION_PRICE_ARS'] = float(os.environ.get('SUBSCRIPTION_PRICE_
 
 db = SQLAlchemy(app)
 CORS(app)
+
+# Database connection validation
+def validate_database_connection():
+    """Validate database connection on startup"""
+    try:
+        with app.app_context():
+            # Test database connection
+            from sqlalchemy import text
+            db.engine.execute(text("SELECT 1"))
+            
+            # Log current configuration
+            db_uri = app.config['SQLALCHEMY_DATABASE_URI']
+            if 'sqlite' in db_uri.lower():
+                print("⚠️  Using SQLite database")
+            else:
+                print(f"✅ Connected to: {db_uri.split('://')[0].upper()}")
+                
+        return True
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        return False
+
+# Validate database connection
+if not validate_database_connection():
+    print("🚨 CRITICAL: Database connection failed!")
+    if os.environ.get('FLASK_ENV') == 'production':
+        print("🚨 Production requires working database connection")
+        # In production, you might want to: raise Exception("Database connection required")
+    else:
+        print("🔧 Development mode: continuing with potentially broken database")
 
 # Custom Jinja filters
 @app.template_filter('from_json')
@@ -3505,6 +3565,39 @@ if __name__ == '__main__':
     if not scheduler.running:
         scheduler.start()
     
+    # Health check endpoints
+    @app.route('/health/database')
+    def database_health():
+        """Database health check endpoint"""
+        try:
+            with app.app_context():
+                from sqlalchemy import text
+                db.engine.execute(text("SELECT 1"))
+                user_count = User.query.count()
+            
+            db_uri = app.config['SQLALCHEMY_DATABASE_URI']
+            return {
+                "status": "healthy",
+                "database": db_uri.split('://')[0].upper(),
+                "user_count": user_count,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy", 
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }, 500
+
+    @app.route('/health')
+    def general_health():
+        """General application health check"""
+        return {
+            "status": "healthy",
+            "application": "Caloria",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
     # Use port 5001 to avoid conflicts with other projects
     port = int(os.getenv('PORT', 5001))
     app.run(debug=True, host='0.0.0.0', port=port) 

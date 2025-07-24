@@ -39,6 +39,24 @@ A comprehensive WhatsApp chatbot that helps users track their calorie intake and
 - **Daily Stats**: Aggregated daily statistics and recommendations
 - **Admin Users**: Administrative access management
 
+## 📚 Documentation
+
+### **🔗 Quick Access to Documentation**
+- **[📚 Documentation Index](./DOCUMENTATION_INDEX.md)** - Complete reference to all guides
+- **[📘 Mercado Pago Integration Guide](./MERCADOPAGO_INTEGRATION_GUIDE.md)** - **MAIN REFERENCE** for payment integration
+- **[🚨 Mercado Pago Webhook Fixes](./MERCADOPAGO_WEBHOOK_FIXES.md)** - Critical fixes and corrections
+- **[🚀 Deployment Guide](./DEPLOYMENT_CONSOLIDATED.md)** - Production deployment instructions
+
+### **💳 Subscription Features (NEW)**
+Caloria now includes a premium subscription system powered by Mercado Pago:
+- **1-day free trial** with full premium access
+- **Monthly subscription** at $4999.00 ARS (~$5.00 USD)
+- **Argentina-focused** payment integration
+- **Real-time webhook processing** for subscription status
+- **Comprehensive trial management** and re-engagement flows
+
+**For all subscription integration details, see the [Mercado Pago Integration Guide](./MERCADOPAGO_INTEGRATION_GUIDE.md).**
+
 ## 🛠️ Installation
 
 ### Prerequisites

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suscripción Cancelada - Caloria</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Arial', sans-serif;
+        }
+        .cancel-card {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            margin: 2rem;
+        }
+        .cancel-icon {
+            font-size: 4rem;
+            color: #ef4444;
+            margin-bottom: 1.5rem;
+        }
+        .cancel-title {
+            color: #1f2937;
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        .cancel-message {
+            color: #6b7280;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .whatsapp-btn {
+            background: #25d366;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .whatsapp-btn:hover {
+            background: #20b954;
+            color: white;
+            transform: translateY(-2px);
+        }
+        .retry-btn {
+            background: #2563eb;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .retry-btn:hover {
+            background: #1d4ed8;
+            color: white;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="cancel-card">
+        <div class="cancel-icon">
+            <i class="fas fa-times-circle"></i>
+        </div>
+        
+        <h1 class="cancel-title">Suscripción Cancelada</h1>
+        
+        <div class="cancel-message">
+            😔 <strong>Has cancelado tu suscripción</strong><br><br>
+            
+            No se te cobrará nada y no tendrás acceso a las funciones premium.<br><br>
+            
+            ❌ <strong>Ya no tienes acceso a:</strong><br>
+            📊 Análisis ilimitados de comidas<br>
+            🎯 Recomendaciones personalizadas<br>
+            📈 Seguimiento detallado de progreso<br>
+            💬 Soporte prioritario<br><br>
+            
+            {% if user %}
+            <strong>Usuario:</strong> {{ user.first_name or 'Usuario' }}<br>
+            <strong>WhatsApp ID:</strong> {{ user.whatsapp_id[:10] }}...<br><br>
+            {% endif %}
+            
+            💭 <strong>¿Cambio de opinión?</strong><br>
+            Siempre puedes volver cuando estés listo. Te contactaremos en una semana con una oferta especial.
+        </div>
+        
+        <div class="action-buttons">
+            <a href="https://wa.me/" class="whatsapp-btn">
+                <i class="fab fa-whatsapp me-2"></i>
+                Volver a WhatsApp
+            </a>
+            
+            <a href="https://caloria.vip" class="retry-btn">
+                <i class="fas fa-redo me-2"></i>
+                Intentar de Nuevo
+            </a>
+        </div>
+        
+        <div class="mt-4">
+            <small class="text-muted">
+                ¡Gracias por probar Caloria! Esperamos verte pronto. 💚
+            </small>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-redirect to WhatsApp after 8 seconds
+        setTimeout(function() {
+            window.location.href = 'https://wa.me/';
+        }, 8000);
+    </script>
+</body>
+</html> 

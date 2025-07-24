@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suscripción Exitosa - Caloria</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #2563eb 0%, #10b981 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Arial', sans-serif;
+        }
+        .success-card {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            margin: 2rem;
+        }
+        .success-icon {
+            font-size: 4rem;
+            color: #10b981;
+            margin-bottom: 1.5rem;
+        }
+        .success-title {
+            color: #1f2937;
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        .success-message {
+            color: #6b7280;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .whatsapp-btn {
+            background: #25d366;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .whatsapp-btn:hover {
+            background: #20b954;
+            color: white;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="success-card">
+        <div class="success-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        
+        <h1 class="success-title">¡Suscripción Exitosa!</h1>
+        
+        <div class="success-message">
+            🎉 <strong>¡Bienvenido a Caloria Premium!</strong><br><br>
+            
+            Tu prueba gratuita de <strong>24 horas</strong> ha comenzado.<br><br>
+            
+            ✨ <strong>Ahora tienes acceso a:</strong><br>
+            📊 Análisis ilimitados de comidas<br>
+            🎯 Recomendaciones personalizadas<br>
+            📈 Seguimiento detallado de progreso<br>
+            💬 Soporte prioritario<br><br>
+            
+            {% if user %}
+            <strong>Usuario:</strong> {{ user.first_name or 'Usuario' }}<br>
+            <strong>WhatsApp ID:</strong> {{ user.whatsapp_id[:10] }}...<br><br>
+            {% endif %}
+            
+            Vuelve a WhatsApp para comenzar a usar todas las funciones premium.
+        </div>
+        
+        <a href="https://wa.me/" class="whatsapp-btn">
+            <i class="fab fa-whatsapp me-2"></i>
+            Volver a WhatsApp
+        </a>
+        
+        <div class="mt-4">
+            <small class="text-muted">
+                Si tienes problemas, contacta nuestro soporte en WhatsApp.
+            </small>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-redirect to WhatsApp after 5 seconds
+        setTimeout(function() {
+            window.location.href = 'https://wa.me/';
+        }, 5000);
+    </script>
+</body>
+</html> 

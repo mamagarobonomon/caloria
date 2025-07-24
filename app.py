@@ -86,9 +86,10 @@ def validate_database_connection():
     """Validate database connection on startup"""
     try:
         with app.app_context():
-            # Test database connection
+            # Test database connection (modern SQLAlchemy syntax)
             from sqlalchemy import text
-            db.engine.execute(text("SELECT 1"))
+            with db.engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
             
             # Log current configuration
             db_uri = app.config['SQLALCHEMY_DATABASE_URI']
@@ -3572,7 +3573,9 @@ def database_health():
     try:
         with app.app_context():
             from sqlalchemy import text
-            db.engine.execute(text("SELECT 1"))
+            # Modern SQLAlchemy syntax
+            with db.engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
             user_count = User.query.count()
         
         db_uri = app.config['SQLALCHEMY_DATABASE_URI']

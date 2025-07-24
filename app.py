@@ -30,6 +30,45 @@ except ImportError:
     GOOGLE_CLOUD_AVAILABLE = False
     # Note: app.logger will be available after Flask app is created
 
+# ===== NEW: Import all modular services and handlers =====
+from config.constants import AppConstants, StatusCodes, APIEndpoints, LogLevels
+from exceptions import (
+    CaloriaException, ValidationException, FoodAnalysisException, 
+    APIException, DatabaseException, handle_exceptions
+)
+
+# Services
+from services.logging_service import caloria_logger, LogTimer
+from services.validation_service import ValidationService, SecurityService
+from services.rate_limiting_service import RateLimitingService
+from services.database_service import DatabaseService
+from services.caching_service import CacheService, cache_service
+from services.metrics_service import (
+    MetricsService, WebhookMetrics, FoodAnalysisMetrics, 
+    DatabaseMetrics, APIMetrics, SubscriptionMetrics
+)
+
+# Handlers
+from handlers.webhook_handlers import WebhookRouter, ManyChannelWebhookHandler, MercadoPagoWebhookHandler
+from handlers.food_analysis_handlers import FoodAnalysisHandler
+from handlers.quiz_handlers import QuizHandler
+
+# Middleware
+from middleware.error_handlers import ErrorHandler
+
+# Monitoring
+from monitoring.health_checks import HealthChecker
+
+# Initialize global services
+metrics_service = MetricsService()
+webhook_metrics = WebhookMetrics()
+food_analysis_metrics = FoodAnalysisMetrics()
+database_metrics = DatabaseMetrics()
+api_metrics = APIMetrics()
+subscription_metrics = SubscriptionMetrics()
+
+# ===== END: New imports =====
+
 app = Flask(__name__)
 
 # Validate environment before configuration
@@ -65,7 +104,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'caloria-secret-key-chan
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///caloria.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = AppConstants.MAX_FILE_SIZE  # 16MB max file size
 
 # API Keys (set as environment variables)
 app.config['SPOONACULAR_API_KEY'] = os.environ.get('SPOONACULAR_API_KEY')
@@ -84,6 +123,37 @@ app.config['SUBSCRIPTION_PRICE_ARS'] = float(os.environ.get('SUBSCRIPTION_PRICE_
 
 db = SQLAlchemy(app)
 CORS(app)
+
+# ===== NEW: Initialize all services with app and database =====
+# Initialize rate limiting service
+rate_limiting_service = RateLimitingService()
+rate_limiting_service.init_app(app)
+
+# Initialize database service
+database_service = DatabaseService(db)
+
+# Initialize food analysis handler
+food_analysis_handler = FoodAnalysisHandler(db, None, None)  # Will set models after they're defined
+
+# Initialize quiz handler
+quiz_handler = QuizHandler(db, None)  # Will set User model after it's defined
+
+# Initialize webhook router
+webhook_router = WebhookRouter()
+
+# Initialize error handling middleware
+error_handler = ErrorHandler()
+error_handler.init_app(app)
+
+# Initialize health checker
+health_checker = HealthChecker(db)
+
+# Setup structured logging
+caloria_logger.info("Caloria application starting up", extra={
+    "category": "startup",
+    "google_cloud_available": GOOGLE_CLOUD_AVAILABLE
+})
+# ===== END: Service initialization =====
 
 # Database connection validation
 def validate_database_connection():
@@ -382,6 +452,18 @@ class SystemActivityLog(db.Model):
             app.logger.error(f"Error logging system activity: {str(e)}")
             db.session.rollback()
             return None
+
+# ===== NEW: Set model references for handlers after models are defined =====
+# Now that models are defined, set them for the handlers
+food_analysis_handler.User = User
+food_analysis_handler.FoodLog = FoodLog
+quiz_handler.User = User
+
+caloria_logger.info("Handler model references set successfully", extra={
+    "category": "startup",
+    "models_configured": ["User", "FoodLog"]
+})
+# ===== END: Handler model configuration =====
 
 # Mercado Pago and Subscription Services
 class MercadoPagoService:
@@ -1902,80 +1984,139 @@ def admin_user_detail(user_id):
     
     return render_template('admin/user_detail.html', user=user, food_logs=food_logs, daily_stats=daily_stats)
 
+# ===== NEW: Modern Webhook Routes using Modular Handlers =====
+
 # ManyChat Webhook Routes
 @app.route('/webhook/manychat', methods=['POST'])
+@rate_limiting_service.limiter.limit("100 per minute")
+@handle_exceptions
 def manychat_webhook():
-    """Handle incoming webhooks from ManyChat"""
-    try:
-        data = request.get_json()
-        app.logger.info(f"Received ManyChat webhook: {data}")
-        
-        # Handle different ManyChat webhook formats
-        contact_data = None
-        subscriber_id = None
-        
-        # DETECT TELEGRAM FILE_ID FORMAT (External Request from ManyChat)
-        if ('file_id' in data or 'telegram_file_id' in data):
-            app.logger.info("📁 Detected Telegram file_id format from ManyChat External Request")
-            print("📁 Detected Telegram file_id format from ManyChat External Request")
+    """Handle incoming webhooks from ManyChat using modular handlers"""
+    with LogTimer("manychat_webhook_processing"):
+        try:
+            # Validate and sanitize input
+            request_data = request.get_json()
+            errors, sanitized_data = ValidationService.validate_webhook_input(request_data)
             
-            # Extract file_id and subscriber info
-            file_id = data.get('file_id') or data.get('telegram_file_id')
-            subscriber_id = data.get('subscriber_id') or data.get('user_id') or data.get('id')
+            if errors:
+                caloria_logger.warning("Webhook validation failed", extra={
+                    "category": "webhook",
+                    "errors": errors,
+                    "data": request_data
+                })
+                return jsonify({
+                    "version": "v2",
+                    "content": {
+                        "type": "text", 
+                        "text": "❌ Invalid request data"
+                    }
+                }), StatusCodes.BAD_REQUEST
             
-            if file_id and subscriber_id:
-                subscriber_id = str(subscriber_id)
-                app.logger.info(f"Processing Telegram file_id: {file_id} for subscriber: {subscriber_id}")
-                print(f"Processing Telegram file_id: {file_id} for subscriber: {subscriber_id}")
-                
-                # Get Telegram Bot Token
-                telegram_bot_token = app.config.get('TELEGRAM_BOT_TOKEN')
-                if not telegram_bot_token:
-                    app.logger.error("❌ TELEGRAM_BOT_TOKEN not configured")
-                    return jsonify({
-                        "version": "v2", 
-                        "content": {
-                            "type": "telegram",
-                            "messages": [{
-                                "type": "text",
-                                "text": "❌ Telegram Bot Token not configured. Please contact support."
-                            }]
-                        }
-                    }), 500
-                
-                # Get or create user
-                user = User.query.filter_by(whatsapp_id=subscriber_id).first()
-                if not user:
-                    app.logger.info(f"Creating new user from file_id request: {subscriber_id}")
-                    print(f"Creating new user from file_id request: {subscriber_id}")
-                    user = User(whatsapp_id=subscriber_id)
-                    
-                    # Get user info if available
-                    if data.get('first_name'):
-                        user.first_name = data.get('first_name')
-                    if data.get('last_name'):
-                        user.last_name = data.get('last_name')
-                    
-                    db.session.add(user)
-                    db.session.commit()
-                
-                # Download image using Telegram Bot API
-                app.logger.info(f"📥 Downloading image via Telegram Bot API")
-                print(f"📥 Downloading image via Telegram Bot API")
-                
-                image_filepath = download_telegram_image(file_id, telegram_bot_token)
-                if not image_filepath:
-                    app.logger.error("Failed to download image from Telegram")
-                    return jsonify({
-                        "version": "v2",
-                        "content": {
-                            "type": "telegram", 
-                            "messages": [{
-                                "type": "text",
-                                "text": "❌ Failed to download your image. Please try again!"
-                            }]
-                        }
-                    }), 400
+            # Track webhook metrics
+            webhook_metrics.increment_counter('manychat_webhook_received')
+            webhook_metrics.track_timing('manychat_processing_start', time.time())
+            
+            # Route to appropriate handler
+            response_data, status_code = webhook_router.route_webhook('manychat', sanitized_data)
+            
+            # Track response metrics
+            webhook_metrics.increment_counter(f'manychat_response_{status_code}')
+            
+            caloria_logger.info("ManyChat webhook processed successfully", extra={
+                "category": "webhook",
+                "status_code": status_code,
+                "subscriber_id": sanitized_data.get('subscriber_id')
+            })
+            
+            return jsonify(response_data), status_code
+            
+        except CaloriaException as e:
+            webhook_metrics.increment_error('manychat_webhook')
+            caloria_logger.error(f"ManyChat webhook error: {e.message}", extra={
+                "category": "webhook",
+                "error_code": e.error_code,
+                "details": e.details
+            })
+            return jsonify({
+                "version": "v2",
+                "content": {"type": "text", "text": "❌ Service temporarily unavailable"}
+            }), StatusCodes.INTERNAL_SERVER_ERROR
+            
+        except Exception as e:
+            webhook_metrics.increment_error('manychat_webhook')
+            caloria_logger.error(f"Unexpected webhook error: {str(e)}", extra={
+                "category": "webhook",
+                "error": str(e)
+            })
+            return jsonify({
+                "version": "v2", 
+                "content": {"type": "text", "text": "❌ Unexpected error occurred"}
+            }), StatusCodes.INTERNAL_SERVER_ERROR
+
+# MercadoPago Webhook Routes
+@app.route('/webhook/mercadopago', methods=['POST'])
+@rate_limiting_service.limiter.limit("200 per minute")
+@handle_exceptions
+def mercadopago_webhook():
+    """Handle Mercado Pago webhooks using modular handlers"""
+    with LogTimer("mercadopago_webhook_processing"):
+        try:
+            # Validate webhook signature
+            payload = request.get_data()
+            signature = request.headers.get('x-signature', '')
+            
+            if not SecurityService.verify_webhook_signature(payload, signature, app.config.get('MERCADO_PAGO_WEBHOOK_SECRET', '')):
+                caloria_logger.warning("Invalid MercadoPago webhook signature", extra={
+                    "category": "security",
+                    "signature": signature
+                })
+                return jsonify({'error': 'Invalid signature'}), StatusCodes.UNAUTHORIZED
+            
+            # Validate and sanitize input
+            request_data = request.get_json()
+            errors, sanitized_data = ValidationService.validate_mercadopago_webhook(request_data)
+            
+            if errors:
+                caloria_logger.warning("MercadoPago webhook validation failed", extra={
+                    "category": "webhook",
+                    "errors": errors
+                })
+                return jsonify({'error': 'Invalid webhook data'}), StatusCodes.BAD_REQUEST
+            
+            # Track webhook metrics
+            webhook_metrics.increment_counter('mercadopago_webhook_received')
+            
+            # Route to appropriate handler
+            response_data, status_code = webhook_router.route_webhook('mercadopago', sanitized_data)
+            
+            # Track response metrics
+            webhook_metrics.increment_counter(f'mercadopago_response_{status_code}')
+            
+            caloria_logger.info("MercadoPago webhook processed successfully", extra={
+                "category": "webhook",
+                "status_code": status_code,
+                "webhook_type": sanitized_data.get('type')
+            })
+            
+            return jsonify(response_data), status_code
+            
+        except CaloriaException as e:
+            webhook_metrics.increment_error('mercadopago_webhook')
+            caloria_logger.error(f"MercadoPago webhook error: {e.message}", extra={
+                "category": "webhook",
+                "error_code": e.error_code
+            })
+            return jsonify({'status': 'error'}), StatusCodes.INTERNAL_SERVER_ERROR
+            
+        except Exception as e:
+            webhook_metrics.increment_error('mercadopago_webhook')
+            caloria_logger.error(f"Unexpected MercadoPago webhook error: {str(e)}", extra={
+                "category": "webhook",
+                "error": str(e)
+            })
+            return jsonify({'status': 'error'}), StatusCodes.INTERNAL_SERVER_ERROR
+
+# ===== END: Modern Webhook Routes =====
                 
                 # Process the downloaded image
                 app.logger.info(f"🖼️ Processing downloaded Telegram image: {image_filepath}")
@@ -3570,40 +3711,52 @@ if __name__ == '__main__':
     if not scheduler.running:
         scheduler.start()
     
-# Health check endpoints (moved outside __main__ block)
+# ===== NEW: Comprehensive Health Check Endpoints =====
+# Register all health check routes from the monitoring service
+health_checker.register_health_checks(app)
+
+@app.route('/health/')
+def health_overview():
+    """Overall application health status"""
+    return health_checker.get_overall_health()
+
+@app.route('/health/ready')
+def readiness_probe():
+    """Kubernetes readiness probe"""
+    return health_checker.check_readiness()
+
+@app.route('/health/live')
+def liveness_probe():
+    """Kubernetes liveness probe"""
+    return health_checker.check_liveness()
+
+@app.route('/health/metrics')
+def metrics_endpoint():
+    """Application metrics endpoint"""
+    return health_checker.get_metrics()
+
 @app.route('/health/database')
 def database_health():
-    """Database health check endpoint"""
-    try:
-        with app.app_context():
-            from sqlalchemy import text
-            # Modern SQLAlchemy syntax
-            with db.engine.connect() as connection:
-                connection.execute(text("SELECT 1"))
-            user_count = User.query.count()
-        
-        db_uri = app.config['SQLALCHEMY_DATABASE_URI']
-        return {
-            "status": "healthy",
-            "database": db_uri.split('://')[0].upper(),
-            "user_count": user_count,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy", 
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }, 500
+    """Database health and performance check"""
+    return health_checker.check_database_health()
 
+@app.route('/health/cache')
+def cache_health():
+    """Cache performance and status"""
+    return health_checker.check_cache_health()
+
+@app.route('/health/version')
+def version_info():
+    """Application version and build info"""
+    return health_checker.get_version_info()
+
+# Legacy health endpoint for backward compatibility
 @app.route('/health')
 def general_health():
-    """General application health check"""
-    return {
-        "status": "healthy",
-        "application": "Caloria",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    """Legacy health endpoint - redirects to comprehensive health"""
+    return health_checker.get_overall_health()
+
+# ===== END: Health Check Endpoints =====
 
 if __name__ == '__main__':
 

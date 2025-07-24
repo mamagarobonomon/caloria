@@ -136,8 +136,8 @@ python -c "from app import app, db; app.app_context().push(); print(db.engine.ta
 
 **3. Data Transfer**
 ```bash
-# Create admin user (if needed)
-python create_admin.py
+# Admin user is automatically created when app starts
+# No manual action needed
 
 # Verify migration
 curl http://localhost:5000/health/database
@@ -302,8 +302,8 @@ ls -la caloria.db
 
 **Solutions**:
 ```bash
-# 1. Create admin user
-python create_admin.py
+# 1. Admin user is automatically created by app.py
+# Check if admin exists:
 
 # 2. Verify admin exists
 python -c "from app import AdminUser; print(AdminUser.query.count())"
@@ -390,7 +390,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 | **Manual Backup** | `sudo -u caloria /var/www/caloria/backup_script.sh` |
 | **View Logs** | `tail -f /var/www/caloria/logs/backup.log` |
 | **Migration** | `python migrate_to_postgresql_final.py` |
-| **Create Admin** | `python create_admin.py` |
+| **Admin User** | Automatically created by app.py |
 
 ### **Contact Information**
 

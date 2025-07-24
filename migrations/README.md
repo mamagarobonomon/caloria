@@ -172,7 +172,7 @@ migrations/
 2. **Database setup**: Configure PostgreSQL for production (see `DATABASE_CONFIGURATION_GUIDE.md`)
 3. **Subscription features**: Run `migrate_subscription_db.py`
 4. **Admin dashboard**: Run `migrate_admin_dashboard.py`
-5. **Create admin user**: Run `create_admin.py` if using PostgreSQL
+5. **Admin user**: Automatically created by app.py on startup
 
 ### **For Future Migrations**
 - **Environment**: Ensure PostgreSQL is configured for production
@@ -202,7 +202,7 @@ migrations/
 ### **🚨 Important Notes for Future Migrations**
 1. **Always backup before migrating**: Use `backup_script.sh`
 2. **Test migrations locally first**: Run with SQLite
-3. **Verify admin users exist**: Run `create_admin.py` if needed
+3. **Verify admin users exist**: Admin is automatically created by app.py
 4. **Check environment loading**: Ensure `load_dotenv()` is called
 5. **Monitor health endpoints**: Use `/health/database` to verify
 

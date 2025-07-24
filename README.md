@@ -118,6 +118,44 @@ python app.py
 
 *Either `GOOGLE_APPLICATION_CREDENTIALS` or `GOOGLE_CLOUD_KEY_JSON` is required for Google Cloud APIs.
 
+## 🏗️ **Clean Project Structure**
+
+After recent cleanup (January 2025), the project maintains a well-organized structure:
+
+### **🗂️ Core Application**
+- `app.py` - Main Flask application (3,612 lines)
+- `requirements.txt` - Python dependencies
+- `README.md` - This comprehensive guide
+
+### **📚 Documentation**
+- `DOCUMENTATION_INDEX.md` - **Navigation hub** for all guides
+- `DATABASE_CONFIGURATION_GUIDE.md` - **Main database reference**
+- `DEPLOYMENT_CONSOLIDATED.md` - Production deployment
+- `MERCADOPAGO_INTEGRATION_GUIDE.md` - Payment integration
+- Feature-specific guides (WhatsApp, ManyChat, Google Cloud)
+
+### **🗄️ Database & Migrations**
+- `migrations/` - Organized migration scripts
+  - `migrate_subscription_db.py`
+  - `migrate_admin_dashboard.py`
+  - `setup_mercadopago_env.py`
+
+### **🔧 Production Scripts**
+- `backup_script.sh` - Automated PostgreSQL backups
+- `monitor_caloria.sh` - Domain/port monitoring
+- `safe_deploy_script.sh` - Production deployment
+
+### **🧪 Testing & Validation**
+- `test_subscription_flow.py` - Subscription testing
+- `test_corrected_webhook.py` - Webhook testing
+- `test_telegram_subscription_flow.py` - End-to-end testing
+
+**Benefits of Clean Structure:**
+- ✅ **No duplicate files** - Clear single-purpose files
+- ✅ **Organized migrations** - All in dedicated `/migrations/` folder
+- ✅ **Current documentation** - No outdated or conflicting guides
+- ✅ **Production ready** - All scripts tested and documented
+
 ### ManyChat Setup
 
 1. **Create ManyChat Account**: Sign up at manychat.com

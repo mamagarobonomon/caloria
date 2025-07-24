@@ -171,6 +171,40 @@ if ! ufw status | grep -q "Status: active"; then
     echo "y" | ufw enable
 fi
 
+# 🔒 AUTOMATICALLY CONFIGURE SSL CERTIFICATE
+echo "🔒 Setting up SSL certificate for caloria.vip..."
+if ! certbot certificates 2>/dev/null | grep -q "caloria.vip"; then
+    echo "📜 Creating new SSL certificate..."
+    certbot --nginx -d caloria.vip -d www.caloria.vip --non-interactive --agree-tos --email sergey@caloria.vip --redirect
+else
+    echo "📜 SSL certificate exists, ensuring nginx SSL configuration..."
+    certbot --nginx -d caloria.vip -d www.caloria.vip --redirect --non-interactive
+fi
+
+# ✅ VERIFY DEPLOYMENT INTEGRITY
+echo "✅ Verifying deployment integrity..."
+
+# Check port 5001 is exclusively used by caloria
+CALORIA_PID=$(lsof -ti :5001 2>/dev/null)
+if [ -n "$CALORIA_PID" ]; then
+    CALORIA_USER=$(ps -o user= -p $CALORIA_PID 2>/dev/null)
+    if [ "$CALORIA_USER" != "caloria" ]; then
+        echo "❌ WARNING: Port 5001 is used by user '$CALORIA_USER', not 'caloria'"
+        echo "🔧 Killing conflicting process..."
+        kill $CALORIA_PID 2>/dev/null || true
+        sleep 2
+    fi
+fi
+
+# Test nginx configuration
+nginx -t || {
+    echo "❌ Nginx configuration test failed!"
+    exit 1
+}
+
+# Reload nginx to apply SSL changes
+systemctl reload nginx
+
 echo ""
 echo "🎉 SAFE deployment setup complete!"
 echo ""

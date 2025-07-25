@@ -8,18 +8,43 @@
 
 | Document | Purpose | Status |
 |----------|---------|--------|
+| [🤖 Gemini Vision Migration Complete](./GEMINI_VISION_MIGRATION_COMPLETE.md) | **NEW** - Gemini Vision AI upgrade summary | ✅ Current |
+| [💰 Gemini Vision Cost Analysis](./GEMINI_VISION_COST_ANALYSIS.md) | **NEW** - Cost comparison and ROI analysis | ✅ Current |
+| [⚙️ Vertex AI Setup Guide](./VERTEX_AI_SETUP_GUIDE.md) | **NEW** - Complete Vertex AI configuration | ✅ Current |
+| [🔐 Vertex AI IAM Setup](./VERTEX_AI_IAM_SETUP.md) | **NEW** - IAM roles configuration for Gemini | ✅ Current |
 | [📘 Mercado Pago Integration Guide](./MERCADOPAGO_INTEGRATION_GUIDE.md) | **MAIN REFERENCE** - Complete MP integration details | ✅ Current |
 | [🚨 Mercado Pago Webhook Fixes](./MERCADOPAGO_WEBHOOK_FIXES.md) | Critical fixes based on MP documentation | ✅ Applied |
-| [🌐 Google Cloud Integration Guide](./GOOGLE_CLOUD_GUIDE.md) | **CONSOLIDATED** - Setup & migration guide | ✅ Current |
+| [🌐 Google Cloud Integration Guide](./GOOGLE_CLOUD_GUIDE.md) | **UPDATED** - Setup & migration guide with Gemini Vision | ✅ Current |
 | [🗄️ Database Configuration Guide](./DATABASE_CONFIGURATION_GUIDE.md) | **MAIN** - Complete database setup & management | ✅ Current |
-| [📖 Project README](./README.md) | **UPDATED** - Comprehensive project overview with enterprise features | ✅ Current |
+| [📖 Project README](./README.md) | **UPDATED** - Comprehensive project overview with Gemini Vision | ✅ Current |
 | [🚀 Deployment Guide](./DEPLOYMENT_CONSOLIDATED.md) | Production deployment instructions | ✅ Current |
-| [📊 Implementation Complete Guide](./IMPLEMENTATION_COMPLETE.md) | **NEW** - Detailed implementation report | ✅ Current |
-| [🏢 Architecture Overview](./ARCHITECTURE_OVERVIEW.md) | **NEW** - Enterprise architecture deep dive | ✅ Current |
+| [📊 Implementation Complete Guide](./IMPLEMENTATION_COMPLETE.md) | **UPDATED** - Detailed implementation report | ✅ Current |
+| [🏢 Architecture Overview](./ARCHITECTURE_OVERVIEW.md) | **UPDATED** - Enterprise architecture with AI/ML section | ✅ Current |
 
 ---
 
-## 🏢 **Enterprise Architecture Documentation (NEW - January 2025)**
+## 🤖 **AI/ML Documentation (NEW - July 2025)**
+
+### 🚀 **Gemini Vision AI Integration**
+| Component | Purpose | Key Features |
+|-----------|---------|--------------|
+| [🤖 Gemini Vision Migration Complete](./GEMINI_VISION_MIGRATION_COMPLETE.md) | Complete migration summary and benefits | 90-95% accuracy, 60% cost savings, production deployment |
+| [💰 Gemini Vision Cost Analysis](./GEMINI_VISION_COST_ANALYSIS.md) | Detailed cost comparison and ROI | Monthly savings calculator, cost per image analysis |
+| [⚙️ Vertex AI Setup Guide](./VERTEX_AI_SETUP_GUIDE.md) | Step-by-step Vertex AI configuration | API enablement, authentication, model setup |
+| [🔐 Vertex AI IAM Setup](./VERTEX_AI_IAM_SETUP.md) | IAM roles and permissions setup | Service account configuration, role assignments |
+| [`test_gemini_vision.py`](./test_gemini_vision.py) | Comprehensive Gemini Vision testing | Real image analysis, confidence testing, integration validation |
+| [`cost_calculator.py`](./cost_calculator.py) | Cost estimation tool | Compare Gemini vs traditional vision API costs |
+
+### 🎯 **AI Architecture Benefits**
+- **📈 Accuracy**: 90-95% vs 30-50% with basic vision APIs
+- **💰 Cost Efficiency**: 60% reduction in analysis costs
+- **🎯 Professional Quality**: Nutritionist-level descriptions with specific weights
+- **⚡ Performance**: Simplified fallback chain, faster responses
+- **🔧 Production Ready**: Successfully deployed with comprehensive testing
+
+---
+
+## 🏢 **Enterprise Architecture Documentation (January 2025)**
 
 ### 📦 **Configuration Management**
 | Component | Purpose | Location |

@@ -194,7 +194,7 @@ class ManyChannelWebhookHandler:
         """Handle attachment (audio/voice) message from user"""
         from handlers.food_analysis_handlers import FoodAnalysisHandler
         
-        food_handler = FoodAnalysisHandler(self.db, self.User, self.FoodLog)
+        food_handler = FoodAnalysisHandler(self.db, self.models['User'], self.models['FoodLog'])
         return food_handler.analyze_food_audio(subscriber_id, attachment_url)
     
     def _handle_profile_update(self, subscriber_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -266,17 +266,18 @@ class ManyChannelWebhookHandler:
         """Handle quiz-related commands"""
         from handlers.quiz_handlers import QuizHandler
         
-        quiz_handler = QuizHandler(self.db, self.User)
+        quiz_handler = QuizHandler(self.db, self.models['User'])
         return quiz_handler.process_quiz_input(subscriber_id, text)
     
     def _get_or_create_user(self, subscriber_id: str):
-        """Get existing user or create new one"""
-        user = self.User.query.filter_by(whatsapp_id=subscriber_id).first()
+        """Get existing user or create new one with language detection"""
+        user = self.models['User'].query.filter_by(whatsapp_id=subscriber_id).first()
         
         if not user:
-            user = self.User(
+            user = self.models['User'](
                 whatsapp_id=subscriber_id,
                 is_active=True,
+                language='es',  # Default to Spanish
                 created_at=datetime.utcnow(),
                 last_interaction=datetime.utcnow()
             )
@@ -285,9 +286,13 @@ class ManyChannelWebhookHandler:
             
             self.logger.log_user_action(
                 'user_created',
-                {'whatsapp_id': subscriber_id},
+                {'whatsapp_id': subscriber_id, 'language': 'es'},
                 str(user.id)
             )
+        else:
+            # Update last interaction
+            user.last_interaction = datetime.utcnow()
+            self.db.session.commit()
         
         return user
 
@@ -304,9 +309,12 @@ class ManyChannelWebhookHandler:
         return {'message': 'Analysis completed'}
     
     def _handle_quick_reply_message(self, subscriber_id: str, payload: str) -> Dict[str, Any]:
-        """Handle quick reply button presses (Analyze/New Log)"""
+        """Handle quick reply button presses (Analyze/New Log) - BILINGUAL"""
         try:
-            self.logger.info(f"📱 Processing quick reply: {payload} for {subscriber_id}")
+            user = self._get_or_create_user(subscriber_id)
+            user_lang = user.language or 'es'  # Default to Spanish
+            
+            self.logger.info(f"📱 Processing quick reply: {payload} for {subscriber_id} in {user_lang}")
             
             if payload.startswith('analyze_food:'):
                 # Extract session key from payload
@@ -321,17 +329,46 @@ class ManyChannelWebhookHandler:
                 return self._convert_multipart_response(analysis_response)
                 
             elif payload == 'new_food_log':
-                # Reset and prompt for new food log
+                # Reset and prompt for new food log (language-aware)
+                messages = {
+                    'es': '📸 ¡Listo para un nuevo registro! Envíame una foto de tu comida o describe lo que comiste.',
+                    'en': '📸 Ready for a new food log! Send me a photo of your meal, or describe what you ate.'
+                }
                 return {
-                    'message': '📸 Ready for a new food log! Send me a photo of your meal, or describe what you ate.'
+                    'message': messages.get(user_lang, messages['es'])
                 }
             
+            elif payload.startswith('set_language:'):
+                # Handle language switching
+                new_lang = payload.replace('set_language:', '')
+                if new_lang in ['es', 'en']:
+                    user.language = new_lang
+                    self.db.session.commit()
+                    
+                    welcome_messages = {
+                        'es': '🇪🇸 Idioma cambiado a español. ¡Ahora puedes enviar fotos de tu comida para análisis nutricional!',
+                        'en': '🇺🇸 Language switched to English. Now you can send photos of your food for nutritional analysis!'
+                    }
+                    return {
+                        'message': welcome_messages[new_lang],
+                        'language_set': new_lang
+                    }
+            
             else:
-                return {'message': 'Unknown action. Please try again.'}
+                error_messages = {
+                    'es': 'Acción desconocida. Por favor intenta de nuevo.',
+                    'en': 'Unknown action. Please try again.'
+                }
+                return {'message': error_messages.get(user_lang, error_messages['es'])}
                 
         except Exception as e:
+            user_lang = getattr(self._get_or_create_user(subscriber_id), 'language', 'es')
             self.logger.error(f"Quick reply handling failed: {str(e)}", e)
-            return {'message': '❌ Sorry, something went wrong. Please try again.'}
+            error_messages = {
+                'es': '❌ Lo siento, algo salió mal. Por favor intenta de nuevo.',
+                'en': '❌ Sorry, something went wrong. Please try again.'
+            }
+            return {'message': error_messages.get(user_lang, error_messages['es'])}
 
     def _convert_multipart_response(self, analysis_response: Dict[str, Any]) -> Dict[str, Any]:
         """Convert multi-part analysis response to single ManyChat message"""
@@ -376,10 +413,11 @@ class ManyChannelWebhookHandler:
             return self._handle_regular_text_analysis(subscriber_id, text)
 
     def _handle_regular_text_analysis(self, subscriber_id: str, text: str) -> Dict[str, Any]:
-        """Handle regular text-based food analysis"""
+        """Handle regular text-based food analysis - BILINGUAL"""
         try:
             # Check for quiz flow first
             user = self._get_or_create_user(subscriber_id)
+            user_lang = user.language or 'es'
             
             if not user.quiz_completed:
                 # Handle quiz response
@@ -393,13 +431,49 @@ class ManyChannelWebhookHandler:
             analysis_response = self.food_analysis_handler.analyze_food_text(subscriber_id, text)
             
             if 'error' in analysis_response:
-                return {'message': '❌ Sorry, I couldn\'t analyze your food description. Please try again.'}
+                error_messages = {
+                    'es': '❌ Lo siento, no pude analizar tu descripción de comida. Por favor intenta de nuevo.',
+                    'en': '❌ Sorry, I couldn\'t analyze your food description. Please try again.'
+                }
+                return {'message': error_messages.get(user_lang, error_messages['es'])}
             
             return {'message': analysis_response.get('message', 'Food analysis completed')}
             
         except Exception as e:
+            user_lang = getattr(self._get_or_create_user(subscriber_id), 'language', 'es')
             self.logger.error(f"Regular text analysis failed: {str(e)}", e)
-            return {'message': '❌ Sorry, something went wrong. Please try again.'}
+            error_messages = {
+                'es': '❌ Lo siento, algo salió mal. Por favor intenta de nuevo.',
+                'en': '❌ Sorry, something went wrong. Please try again.'
+            }
+            return {'message': error_messages.get(user_lang, error_messages['es'])}
+
+    def _detect_user_language(self, data: Dict[str, Any], subscriber_id: str) -> str:
+        """Detect user language from message content or set default"""
+        user = self._get_or_create_user(subscriber_id)
+        
+        # If user already has language set, use it
+        if user.language:
+            return user.language
+        
+        # Try to detect from message content
+        text = data.get('text', '').lower()
+        
+        # Spanish indicators
+        spanish_indicators = ['hola', 'comida', 'análisis', 'español', 'gracias', 'por favor']
+        # English indicators  
+        english_indicators = ['hello', 'food', 'analysis', 'english', 'thanks', 'please']
+        
+        spanish_score = sum(1 for word in spanish_indicators if word in text)
+        english_score = sum(1 for word in english_indicators if word in text)
+        
+        detected_lang = 'en' if english_score > spanish_score else 'es'
+        
+        # Set detected language for user
+        user.language = detected_lang
+        self.db.session.commit()
+        
+        return detected_lang
 
     def _get_pending_session_key(self, subscriber_id: str) -> Optional[str]:
         """Get the most recent session key for user if exists"""
@@ -606,7 +680,7 @@ class WebhookRouter:
         self.db = db
         self.models = models
         self.manychat_handler = ManyChannelWebhookHandler(
-            db, models['User'], models['FoodLog']
+            db, models
         )
         self.mercadopago_handler = MercadoPagoWebhookHandler(
             db, models['User'], models.get('Subscription')

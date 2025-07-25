@@ -44,7 +44,7 @@ class FoodAnalysisHandler:
                 self.logger.info(f"Using cached analysis for text: {text[:30]}...")
             else:
                 # Perform new analysis
-                analysis_result = self._analyze_text_with_spoonacular(text)
+                analysis_result = self._analyze_text_with_enhanced_fallback(text)
                 
                 # Cache the result
                 FoodAnalysisCache.cache_food_analysis(text, analysis_result, 'text')
@@ -172,7 +172,7 @@ class FoodAnalysisHandler:
                 text_from_audio = self._transcribe_audio(audio_url)
                 
                 # Analyze the transcribed text
-                analysis_result = self._analyze_text_with_spoonacular(text_from_audio)
+                analysis_result = self._analyze_text_with_enhanced_fallback(text_from_audio)
                 analysis_result['transcribed_text'] = text_from_audio
                 
                 # Cache the result
@@ -213,56 +213,8 @@ class FoodAnalysisHandler:
                 'message': Messages.INVALID_AUDIO
             }
     
-    def _analyze_text_with_spoonacular(self, text: str) -> Dict[str, Any]:
-        """Analyze text using Spoonacular API"""
-        try:
-            with LogTimer("spoonacular_text_analysis"):
-                # Check API cache first
-                params = {'text': text}
-                cached_response = APIResponseCache.get_cached_spoonacular_response(
-                    'parseIngredients', params
-                )
-                
-                if cached_response:
-                    return self._process_spoonacular_response(cached_response)
-                
-                # Make API call
-                api_key = os.getenv('SPOONACULAR_API_KEY')
-                if not api_key:
-                    raise APIException("Spoonacular API key not configured", api_service='spoonacular')
-                
-                response = requests.post(
-                    APIEndpoints.SPOONACULAR_PARSE,
-                    data={
-                        'ingredientList': text,
-                        'servings': 1,
-                        'includeNutrition': True
-                    },
-                    headers={'X-RapidAPI-Key': api_key},
-                    timeout=AppConstants.SPOONACULAR_TIMEOUT
-                )
-                
-                if response.status_code != 200:
-                    raise APIException(
-                        f"Spoonacular API error: {response.status_code}",
-                        api_service='spoonacular',
-                        status_code=response.status_code
-                    )
-                
-                response_data = response.json()
-                
-                # Cache the response
-                APIResponseCache.cache_spoonacular_response(
-                    'parseIngredients', params, response_data
-                )
-                
-                return self._process_spoonacular_response(response_data)
-                
-        except Exception as e:
-            self.logger.log_api_error('spoonacular', 'parseIngredients', e)
-            
-            # Fallback to basic analysis
-            return self._fallback_text_analysis(text)
+    # Spoonacular integration removed - now using Gemini Vision AI only
+    # Text analysis now uses enhanced fallback with nutrition database
     
     def _analyze_image_comprehensive(self, image_data: bytes, image_url: str) -> Dict[str, Any]:
         """Analyze image using Gemini Vision as primary method with simplified fallbacks"""
@@ -320,12 +272,7 @@ class FoodAnalysisHandler:
             self.logger.log_api_error('google_vision_deprecated', 'redirect_to_gemini', e)
             raise FoodAnalysisException("Deprecated Google Vision method failed", analysis_method='deprecated_google_vision')
     
-    def _analyze_image_with_spoonacular(self, image_url: str) -> Dict[str, Any]:
-        """DEPRECATED: Spoonacular image analysis - Gemini Vision is more accurate and cost-effective"""
-        self.logger.warning("⚠️ Using deprecated Spoonacular image analysis - Gemini Vision recommended")
-        
-        # Use enhanced fallback instead of expensive Spoonacular image API
-        return self._fallback_image_analysis(image_url)
+    # Spoonacular image analysis removed - now using Gemini Vision AI only
     
     def _transcribe_audio(self, audio_url: str) -> str:
         """Transcribe audio using Google Cloud Speech-to-Text"""
@@ -528,48 +475,8 @@ class FoodAnalysisHandler:
             'analysis_method': 'fallback_image'
         }
     
-    # Helper methods for processing API responses
-    def _process_spoonacular_response(self, response_data: List[Dict]) -> Dict[str, Any]:
-        """Process Spoonacular API response"""
-        if not response_data:
-            raise FoodAnalysisException("Empty response from Spoonacular", analysis_method='spoonacular')
-        
-        # Take first ingredient
-        ingredient = response_data[0]
-        nutrition = ingredient.get('nutrition', {})
-        nutrients = {n['name'].lower(): n['amount'] for n in nutrition.get('nutrients', [])}
-        
-        return {
-            'food_name': ingredient.get('name', 'Unknown Food'),
-            'calories': nutrients.get('calories', 0),
-            'protein': nutrients.get('protein', 0),
-            'carbs': nutrients.get('carbohydrates', 0),
-            'fat': nutrients.get('fat', 0),
-            'fiber': nutrients.get('fiber', 0),
-            'sodium': nutrients.get('sodium', 0),
-            'confidence_score': min(ingredient.get('consistency', 0.5), 1.0),
-            'analysis_method': 'spoonacular'
-        }
-    
-    def _process_spoonacular_image_response(self, response_data: Dict) -> Dict[str, Any]:
-        """Process Spoonacular image classification response"""
-        category = response_data.get('category', 'food')
-        probability = response_data.get('probability', 0.5)
-        
-        # Basic nutrition estimation based on category
-        nutrition_estimates = self._estimate_nutrition_by_category(category)
-        
-        return {
-            'food_name': category.replace('_', ' ').title(),
-            'calories': nutrition_estimates['calories'],
-            'protein': nutrition_estimates['protein'],
-            'carbs': nutrition_estimates['carbs'],
-            'fat': nutrition_estimates['fat'],
-            'fiber': nutrition_estimates['fiber'],
-            'sodium': nutrition_estimates['sodium'],
-            'confidence_score': probability,
-            'analysis_method': 'spoonacular_image'
-        }
+    # Spoonacular processing methods removed - now using Gemini Vision AI only
+    # Enhanced fallback provides nutrition estimation based on food names and categories
     
     def _estimate_nutrition_by_category(self, category: str) -> Dict[str, float]:
         """Estimate nutrition based on food category"""

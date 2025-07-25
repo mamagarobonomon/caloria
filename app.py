@@ -113,7 +113,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = AppConstants.MAX_FILE_SIZE  # 16MB max file size
 
 # API Keys (set as environment variables)
-app.config['SPOONACULAR_API_KEY'] = os.environ.get('SPOONACULAR_API_KEY')
+# app.config['SPOONACULAR_API_KEY'] = os.environ.get('SPOONACULAR_API_KEY')  # Removed - using Gemini Vision AI only
 app.config['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY')
 app.config['GOOGLE_CLOUD_API_KEY'] = os.environ.get('GOOGLE_CLOUD_API_KEY')
 app.config['MANYCHAT_API_TOKEN'] = os.environ.get('MANYCHAT_API_TOKEN')

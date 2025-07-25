@@ -194,32 +194,7 @@ class FoodAnalysisCache:
 class APIResponseCache:
     """Specialized caching for external API responses"""
     
-    @staticmethod
-    def cache_spoonacular_response(endpoint: str, params: Dict[str, Any], 
-                                  response_data: Dict[str, Any], ttl_hours: int = 6) -> None:
-        """Cache Spoonacular API response"""
-        key = f"spoonacular:{endpoint}:{APIResponseCache._hash_params(params)}"
-        
-        cached_response = {
-            'data': response_data,
-            'endpoint': endpoint,
-            'params': params,
-            'cached_at': datetime.utcnow().isoformat()
-        }
-        
-        cache.set(key, cached_response, ttl_hours * 3600)
-    
-    @staticmethod
-    def get_cached_spoonacular_response(endpoint: str, 
-                                      params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Get cached Spoonacular API response"""
-        key = f"spoonacular:{endpoint}:{APIResponseCache._hash_params(params)}"
-        cached_data = cache.get(key)
-        
-        if cached_data:
-            return cached_data['data']
-        
-        return None
+    # Spoonacular API caching methods removed - now using Gemini Vision AI only
     
     @staticmethod
     def cache_google_cloud_response(service: str, params: Dict[str, Any], 

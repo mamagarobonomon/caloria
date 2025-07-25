@@ -7,7 +7,7 @@ requests==2.31.0
 Pillow>=10.3.0
 SpeechRecognition==3.10.0
 openai>=1.54.0
-spoonacular==3.0.0
+# spoonacular==3.0.0  # Removed - using Gemini Vision AI only
 google-cloud-speech==2.21.0
 google-cloud-vision==3.10.2
 google-cloud-aiplatform==1.105.0

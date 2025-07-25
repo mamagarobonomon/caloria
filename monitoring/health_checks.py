@@ -169,13 +169,7 @@ class HealthChecker:
         """Check health of external API dependencies"""
         api_statuses = {}
         
-        # Check Spoonacular API
-        api_statuses['spoonacular'] = self._check_api_endpoint(
-            'https://api.spoonacular.com/food/ingredients/search',
-            {'query': 'apple', 'number': 1},
-            headers={'X-RapidAPI-Key': os.getenv('SPOONACULAR_API_KEY', 'test')},
-            timeout=5
-        )
+        # Spoonacular API removed - now using Gemini Vision AI only
         
         # Check Google Cloud APIs (simplified)
         try:
@@ -340,7 +334,7 @@ class HealthChecker:
         try:
             required_env_vars = [
                 'SECRET_KEY',
-                'SPOONACULAR_API_KEY',
+                # 'SPOONACULAR_API_KEY', # Removed - using Gemini Vision AI only
                 'MANYCHAT_API_TOKEN'
             ]
             

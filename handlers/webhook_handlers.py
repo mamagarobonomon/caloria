@@ -17,14 +17,26 @@ from services.metrics_service import WebhookMetrics
 from services.caching_service import invalidate_user_related_cache
 from exceptions import WebhookValidationException, APIException
 
+# Add imports for enhanced food analysis
+from handlers.enhanced_food_analysis import EnhancedFoodAnalysisHandler
+from handlers.food_analysis_handlers import FoodAnalysisHandler
+from handlers.quiz_handlers import QuizHandler
+
 class ManyChannelWebhookHandler:
     """Handler for ManyChat webhook requests"""
     
-    def __init__(self, db, user_model, food_log_model):
+    def __init__(self, db, models):
         self.db = db
-        self.User = user_model
-        self.FoodLog = food_log_model
+        self.models = models
         self.logger = caloria_logger
+        
+        # Initialize handlers
+        self.food_analysis_handler = FoodAnalysisHandler(db, models['User'], models['FoodLog'])
+        
+        # NEW: Initialize enhanced food analysis handler
+        self.enhanced_food_handler = EnhancedFoodAnalysisHandler(db, models['User'], models['FoodLog'])
+        
+        self.quiz_handler = QuizHandler(db, models['User'])
     
     def process_webhook(self, request_data: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
         """Process ManyChat webhook with comprehensive validation and handling"""
@@ -98,12 +110,18 @@ class ManyChannelWebhookHandler:
             }, StatusCodes.INTERNAL_ERROR
     
     def _route_webhook_content(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Route webhook content to appropriate handler"""
+        """Route webhook content to appropriate handler with enhanced analysis support"""
         subscriber_id = data['subscriber_id']
         
+        # Check for quick reply (button press) first
+        if 'quick_reply' in data:
+            payload = data['quick_reply'].get('payload', '')
+            return self._handle_quick_reply_message(subscriber_id, payload)
+        
         # Check for different content types
-        if 'text' in data and data['text']:
-            return self._handle_text_message(subscriber_id, data['text'])
+        elif 'text' in data and data['text']:
+            # Check if this might be a clarification for pending analysis
+            return self._handle_text_clarification(subscriber_id, data['text'])
         
         elif 'image_url' in data or 'url' in data:
             image_url = data.get('image_url') or data.get('url')
@@ -124,10 +142,9 @@ class ManyChannelWebhookHandler:
     
     def _handle_text_message(self, subscriber_id: str, text: str) -> Dict[str, Any]:
         """Handle text message from user"""
-        from handlers.food_analysis_handlers import FoodAnalysisHandler
         
-        # Initialize food analysis handler
-        food_handler = FoodAnalysisHandler(self.db, self.User, self.FoodLog)
+        # Use the initialized food analysis handler
+        food_handler = self.food_analysis_handler
         
         # Check for special commands
         text_lower = text.lower().strip()
@@ -146,11 +163,32 @@ class ManyChannelWebhookHandler:
             return food_handler.analyze_food_text(subscriber_id, text)
     
     def _handle_image_message(self, subscriber_id: str, image_url: str) -> Dict[str, Any]:
-        """Handle image message from user"""
-        from handlers.food_analysis_handlers import FoodAnalysisHandler
+        """Handle image message with enhanced analysis and clarification"""
         
-        food_handler = FoodAnalysisHandler(self.db, self.User, self.FoodLog)
-        return food_handler.analyze_food_image(subscriber_id, image_url)
+        # Use enhanced food analysis handler for images
+        self.logger.info(f"🔍 Starting enhanced food analysis for {subscriber_id}")
+        
+        try:
+            # Step 1: Analyze photo and generate clarification questions
+            analysis_response = self.enhanced_food_handler.analyze_food_photo_with_clarification(
+                subscriber_id, image_url
+            )
+            
+            if 'error' in analysis_response:
+                # Fallback to basic analysis if enhanced fails
+                self.logger.warning("Enhanced analysis failed, using fallback")
+                basic_response = self.food_analysis_handler.analyze_food_image(subscriber_id, image_url)
+                return {'message': basic_response.get('message', 'Analysis completed')}
+            
+            # Return clarification response with buttons (convert to ManyChat format)
+            return self._convert_enhanced_response_to_manychat(analysis_response)
+            
+        except Exception as e:
+            # Final fallback to basic analysis
+            self.logger.error(f"Enhanced image analysis failed: {str(e)}")
+            from handlers.food_analysis_handlers import FoodAnalysisHandler
+            food_handler = FoodAnalysisHandler(self.db, self.models['User'], self.models['FoodLog'])
+            return food_handler.analyze_food_image(subscriber_id, image_url)
     
     def _handle_attachment_message(self, subscriber_id: str, attachment_url: str) -> Dict[str, Any]:
         """Handle attachment (audio/voice) message from user"""
@@ -252,6 +290,141 @@ class ManyChannelWebhookHandler:
             )
         
         return user
+
+    def _convert_enhanced_response_to_manychat(self, enhanced_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert enhanced analysis response to ManyChat format"""
+        if 'content' in enhanced_response and 'messages' in enhanced_response['content']:
+            message = enhanced_response['content']['messages'][0]
+            return {
+                'message': message['text'],
+                'quick_replies': message.get('quick_replies', []),
+                'session_key': enhanced_response.get('session_key')
+            }
+        
+        return {'message': 'Analysis completed'}
+    
+    def _handle_quick_reply_message(self, subscriber_id: str, payload: str) -> Dict[str, Any]:
+        """Handle quick reply button presses (Analyze/New Log)"""
+        try:
+            self.logger.info(f"📱 Processing quick reply: {payload} for {subscriber_id}")
+            
+            if payload.startswith('analyze_food:'):
+                # Extract session key from payload
+                session_key = payload.replace('analyze_food:', '')
+                
+                # Process final analysis without additional clarifications
+                analysis_response = self.enhanced_food_handler.process_user_clarification(
+                    subscriber_id, session_key, user_input=None
+                )
+                
+                # Convert multi-part response to single message for ManyChat
+                return self._convert_multipart_response(analysis_response)
+                
+            elif payload == 'new_food_log':
+                # Reset and prompt for new food log
+                return {
+                    'message': '📸 Ready for a new food log! Send me a photo of your meal, or describe what you ate.'
+                }
+            
+            else:
+                return {'message': 'Unknown action. Please try again.'}
+                
+        except Exception as e:
+            self.logger.error(f"Quick reply handling failed: {str(e)}", e)
+            return {'message': '❌ Sorry, something went wrong. Please try again.'}
+
+    def _convert_multipart_response(self, analysis_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert multi-part analysis response to single ManyChat message"""
+        if 'content' in analysis_response and 'messages' in analysis_response['content']:
+            messages = analysis_response['content']['messages']
+            
+            # Combine all messages into one with separators
+            combined_text = []
+            for i, msg in enumerate(messages):
+                if i > 0:  # Add separator between messages
+                    combined_text.append("---")
+                combined_text.append(msg['text'])
+            
+            return {
+                'message': '\n\n'.join(combined_text),
+                'analysis_complete': True
+            }
+        
+        return {'message': 'Analysis completed'}
+    
+    def _handle_text_clarification(self, subscriber_id: str, text: str) -> Dict[str, Any]:
+        """Handle text messages that might be clarifications for pending analysis"""
+        try:
+            # Check if there's a pending analysis session for this user
+            session_key = self._get_pending_session_key(subscriber_id)
+            
+            if session_key:
+                # Process as clarification
+                self.logger.info(f"🔍 Processing clarification for session {session_key}")
+                analysis_response = self.enhanced_food_handler.process_user_clarification(
+                    subscriber_id, session_key, user_input=text
+                )
+                
+                return self._convert_multipart_response(analysis_response)
+            
+            else:
+                # Handle as regular text analysis
+                return self._handle_regular_text_analysis(subscriber_id, text)
+                
+        except Exception as e:
+            self.logger.error(f"Text clarification handling failed: {str(e)}", e)
+            return self._handle_regular_text_analysis(subscriber_id, text)
+
+    def _handle_regular_text_analysis(self, subscriber_id: str, text: str) -> Dict[str, Any]:
+        """Handle regular text-based food analysis"""
+        try:
+            # Check for quiz flow first
+            user = self._get_or_create_user(subscriber_id)
+            
+            if not user.quiz_completed:
+                # Handle quiz response
+                quiz_response = self.quiz_handler.handle_quiz_response(user, {
+                    'text': text,
+                    'subscriber_id': subscriber_id
+                })
+                return {'message': quiz_response.get('message', 'Quiz response processed')}
+            
+            # Handle food analysis
+            analysis_response = self.food_analysis_handler.analyze_food_text(subscriber_id, text)
+            
+            if 'error' in analysis_response:
+                return {'message': '❌ Sorry, I couldn\'t analyze your food description. Please try again.'}
+            
+            return {'message': analysis_response.get('message', 'Food analysis completed')}
+            
+        except Exception as e:
+            self.logger.error(f"Regular text analysis failed: {str(e)}", e)
+            return {'message': '❌ Sorry, something went wrong. Please try again.'}
+
+    def _get_pending_session_key(self, subscriber_id: str) -> Optional[str]:
+        """Get the most recent session key for user if exists"""
+        try:
+            from services.caching_service import cache
+            
+            # Look for recent session keys (within last hour)
+            import time
+            current_time = int(time.time())
+            
+            # Check last few minutes for active sessions
+            for minutes_ago in range(60):  # Check last 60 minutes
+                timestamp = current_time - (minutes_ago * 60)
+                
+                # Check various timestamp formats
+                for time_offset in range(-30, 31):  # +/- 30 seconds
+                    test_key = f"food_analysis_{subscriber_id}_{timestamp + time_offset}"
+                    if cache.get(test_key):
+                        return test_key
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error retrieving session key: {str(e)}")
+            return None
 
 class MercadoPagoWebhookHandler:
     """Handler for Mercado Pago webhook requests"""

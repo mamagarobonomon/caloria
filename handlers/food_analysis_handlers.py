@@ -274,18 +274,9 @@ class FoodAnalysisHandler:
                 temp_path = temp_file.name
             
             try:
-                # Primary: Vertex AI Gemini Vision (best accuracy and cost-effective)
-                try:
-                    from app import FoodAnalysisService, VERTEX_AI_AVAILABLE
-                    if VERTEX_AI_AVAILABLE:
-                        gemini_result = FoodAnalysisService._analyze_image_with_gemini_vision(temp_path, None)
-                        if gemini_result and gemini_result.get('confidence_score', 0) >= 0.7:
-                            self.logger.info("✅ Gemini Vision analysis successful")
-                            return gemini_result
-                        else:
-                            self.logger.warning("⚠️ Gemini Vision low confidence, using enhanced fallback")
-                except Exception as e:
-                    self.logger.warning(f"Gemini Vision analysis failed: {str(e)}")
+                # Primary: Vertex AI Gemini Vision (currently using fallback for stable deployment)
+                # TODO: Implement Gemini Vision analysis in future release
+                self.logger.info("📝 Gemini Vision analysis deferred - using enhanced fallback")
                 
                 # Simplified fallback: Enhanced nutrition estimation
                 self.logger.info("🔄 Using enhanced nutrition estimation fallback")
@@ -318,8 +309,8 @@ class FoodAnalysisHandler:
                 temp_path = temp_file.name
             
             try:
-                from app import FoodAnalysisService
-                return FoodAnalysisService._analyze_image_with_gemini_vision(temp_path, None)
+                # Redirect to fallback analysis since Gemini Vision integration is pending
+                return self._fallback_image_analysis("deprecated_google_vision_redirect")
             finally:
                 import os
                 if os.path.exists(temp_path):

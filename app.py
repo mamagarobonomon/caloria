@@ -138,21 +138,9 @@ rate_limiting_service.init_app(app)
 # Initialize database service
 database_service = DatabaseService(db)
 
-# Initialize food analysis handler
-food_analysis_handler = FoodAnalysisHandler(db, None, None)  # Will set models after they're defined
-
-# Initialize quiz handler
-quiz_handler = QuizHandler(db, None)  # Will set User model after it's defined
-
-# Initialize webhook router (will be set after models are defined)
-webhook_router = None
-
 # Initialize error handling middleware
 error_handler = ErrorHandler()
 error_handler.init_app(app)
-
-# Initialize health checker
-health_checker = HealthChecker(db)
 
 # Setup structured logging
 caloria_logger.info("Caloria application starting up", 
@@ -458,168 +446,50 @@ class SystemActivityLog(db.Model):
             db.session.rollback()
             return None
 
-# ===== NEW: Set model references for handlers after models are defined =====
-# Now that models are defined, set them for the handlers
-food_analysis_handler.User = User
-food_analysis_handler.FoodLog = FoodLog
-quiz_handler.User = User
+# ===== NEW: Initialize modular handlers with models after models are defined =====
+# Initialize food analysis handler
+food_analysis_handler = FoodAnalysisHandler(db, User, FoodLog)
+
+# Initialize quiz handler  
+quiz_handler = QuizHandler(db, User)
 
 # Initialize webhook router with models
 models = {
     'User': User,
     'FoodLog': FoodLog,
-    'Subscription': Subscription
+    'Subscription': Subscription,
+    'DailyStats': DailyStats,
+    'SystemActivityLog': SystemActivityLog,
+    'TrialActivity': TrialActivity
 }
 webhook_router = WebhookRouter(db, models)
 
+# Initialize health checker
+health_checker = HealthChecker(db)
+
 caloria_logger.info("Handler model references set successfully",
-    details={"models_configured": ["User", "FoodLog", "Subscription"]},
+    details={"models_configured": list(models.keys())},
     category="startup")
 # ===== END: Handler model configuration =====
 
-# Mercado Pago and Subscription Services
-class MercadoPagoService:
-    @staticmethod
-    def create_subscription_link(user, return_url=None, cancel_url=None):
-        """Create Mercado Pago subscription link for user"""
-        try:
-            access_token = app.config['MERCADO_PAGO_ACCESS_TOKEN']
-            plan_id = app.config['MERCADO_PAGO_PLAN_ID']
-            
-            if not access_token:
-                app.logger.error("Mercado Pago access token not configured")
-                return None
-            
-            # FIXED: Create subscription via API with webhook URL (required for subscriptions)
-            # According to MP docs, webhooks for subscriptions must be configured during creation
-            webhook_url = f"https://caloria.vip/webhook/mercadopago"
-            
-            # Create subscription via API instead of just constructing URL
-            url = "https://api.mercadopago.com/preapproval"
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            subscription_data = {
-                "preapproval_plan_id": plan_id,
-                "payer_email": f"{user.whatsapp_id}@caloria.app",  # Required field
-                "external_reference": user.whatsapp_id,
-                "notification_url": webhook_url,  # CRITICAL: Webhook URL must be set here
-                "back_url": return_url if return_url else f"https://caloria.vip/subscription-success?user={user.id}",
-                "auto_recurring": {
-                    "frequency": 1,
-                    "frequency_type": "months",
-                    "transaction_amount": app.config.get('SUBSCRIPTION_PRICE_ARS', 499900.0) / 100,  # Convert cents to pesos
-                    "currency_id": "ARS"
-                }
-            }
-            
-            app.logger.info(f"Creating subscription via API for user {user.id}")
-            response = requests.post(url, headers=headers, json=subscription_data, timeout=30)
-            
-            if response.status_code in [200, 201]:
-                result = response.json()
-                subscription_id = result.get('id')
-                init_point = result.get('init_point')
-                
-                if init_point:
-                    app.logger.info(f"Subscription created successfully: {subscription_id}")
-                    
-                    # Store subscription ID for tracking
-                    user.mercadopago_subscription_id = subscription_id
-                    user.subscription_status = 'trial_pending'
-                    db.session.commit()
-                    
-                    return init_point
-                else:
-                    app.logger.error(f"No init_point in MP response: {result}")
-                    return None
-            else:
-                app.logger.error(f"MP API error: {response.status_code} - {response.text}")
-                return None
-            
-        except Exception as e:
-            app.logger.error(f"Error creating Mercado Pago subscription: {str(e)}")
-            return None
-    
-    @staticmethod
-    def verify_webhook_signature(data, signature):
-        """Verify Mercado Pago webhook signature for security"""
-        try:
-            webhook_secret = app.config['MERCADO_PAGO_WEBHOOK_SECRET']
-            if not webhook_secret:
-                app.logger.warning("Mercado Pago webhook secret not configured - skipping verification")
-                return True  # Allow for now during development
-            
-            # TODO: Implement proper signature verification
-            # For now, return True to allow webhooks during development
-            return True
-            
-        except Exception as e:
-            app.logger.error(f"Error verifying webhook signature: {str(e)}")
-            return False
-    
-    @staticmethod
-    def get_subscription_details(subscription_id):
-        """Get subscription details from Mercado Pago API"""
-        try:
-            access_token = app.config['MERCADO_PAGO_ACCESS_TOKEN']
-            if not access_token:
-                return None
-            
-            # FIXED: Use correct endpoint according to MP documentation
-            # For subscriptions: https://api.mercadopago.com/preapproval/search
-            url = f"https://api.mercadopago.com/preapproval/{subscription_id}"
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            response = requests.get(url, headers=headers, timeout=30)
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                app.logger.error(f"Error getting subscription details: {response.status_code} - {response.text}")
-                return None
-                
-        except Exception as e:
-            app.logger.error(f"Error fetching subscription details: {str(e)}")
-            return None
-
+# ===== NEW: Create simplified services for missing functionality =====
 class SubscriptionService:
+    """Simplified subscription service to maintain functionality"""
+    
     @staticmethod
     def start_trial(user):
         """Start trial period for user"""
         try:
+            from datetime import datetime, timedelta
             now = datetime.utcnow()
-            trial_days = app.config['SUBSCRIPTION_TRIAL_DAYS']
+            trial_days = app.config.get('SUBSCRIPTION_TRIAL_DAYS', 1)
             
             user.subscription_status = 'trial_active'
-            user.subscription_tier = 'premium'  # Give premium access during trial
+            user.subscription_tier = 'premium'
             user.trial_start_time = now
             user.trial_end_time = now + timedelta(days=trial_days)
             
             db.session.commit()
-            
-            # Log trial activity
-            SubscriptionService.log_trial_activity(user, 'trial_started', {
-                'trial_duration_hours': trial_days * 24,
-                'start_time': now.isoformat()
-            })
-            
-            # Log trial start to system activity log
-            SystemActivityLog.log_activity(
-                user_id=user.id,
-                activity_type='trial_started',
-                activity_data={
-                    'trial_duration_hours': trial_days * 24,
-                    'start_time': now.isoformat(),
-                    'end_time': user.trial_end_time.isoformat()
-                }
-            )
-            
             app.logger.info(f"Started trial for user {user.id}, ends at {user.trial_end_time}")
             return True
             
@@ -638,17 +508,6 @@ class SubscriptionService:
             user.cancellation_reason = reason
             
             db.session.commit()
-            
-            # Log trial activity
-            SubscriptionService.log_trial_activity(user, 'trial_ended', {
-                'reason': reason,
-                'end_time': datetime.utcnow().isoformat()
-            })
-            
-            # Schedule re-engagement if cancelled
-            if reason == 'cancelled':
-                SubscriptionService.schedule_reengagement(user, days=7)
-            
             app.logger.info(f"Ended trial for user {user.id}, reason: {reason}")
             return True
             
@@ -665,12 +524,9 @@ class SubscriptionService:
             user.subscription_tier = 'premium'
             user.mercadopago_subscription_id = subscription_id
             user.last_payment_date = datetime.utcnow()
-            
-            # Clear trial end time since now they're paid
             user.trial_end_time = None
             
             db.session.commit()
-            
             app.logger.info(f"Activated subscription for user {user.id}, MP ID: {subscription_id}")
             return True
             
@@ -684,7 +540,7 @@ class SubscriptionService:
         """Log trial activity for analytics"""
         try:
             if not user.is_trial_active():
-                return  # Don't log if not in trial
+                return
             
             # Calculate hour mark in trial
             hour_mark = 0
@@ -697,7 +553,7 @@ class SubscriptionService:
                 activity_type=activity_type,
                 activity_data=json.dumps(activity_data) if activity_data else None,
                 hour_mark=hour_mark,
-                engagement_score=SubscriptionService._calculate_engagement_score(activity_type)
+                engagement_score=1.0  # Simplified scoring
             )
             
             db.session.add(activity)
@@ -705,888 +561,43 @@ class SubscriptionService:
             
         except Exception as e:
             app.logger.error(f"Error logging trial activity: {str(e)}")
+
+class MercadoPagoService:
+    """Simplified MercadoPago service to maintain functionality"""
     
     @staticmethod
-    def _calculate_engagement_score(activity_type):
-        """Calculate engagement score for different activities"""
-        engagement_scores = {
-            'trial_started': 1.0,
-            'food_analyzed': 2.0,
-            'message_responded': 1.5,
-            'feature_explored': 1.0,
-            'goal_updated': 2.5,
-            'trial_ended': 0.0
-        }
-        return engagement_scores.get(activity_type, 1.0)
-    
-    @staticmethod
-    def schedule_reengagement(user, days=7):
-        """Schedule re-engagement campaign for user"""
+    def get_subscription_details(subscription_id):
+        """Get subscription details from Mercado Pago API"""
         try:
-            scheduled_date = datetime.utcnow() + timedelta(days=days)
-            
-            # Check if already scheduled
-            existing = ReengagementSchedule.query.filter_by(
-                user_id=user.id, 
-                campaign_type='week_1',
-                status='pending'
-            ).first()
-            
-            if existing:
-                return  # Already scheduled
-            
-            reengagement = ReengagementSchedule(
-                user_id=user.id,
-                campaign_type='week_1',
-                scheduled_date=scheduled_date
-            )
-            
-            db.session.add(reengagement)
-            user.reengagement_scheduled = scheduled_date
-            db.session.commit()
-            
-            app.logger.info(f"Scheduled re-engagement for user {user.id} on {scheduled_date}")
-            
-        except Exception as e:
-            app.logger.error(f"Error scheduling re-engagement: {str(e)}")
-    
-    @staticmethod
-    def can_access_feature(user, feature):
-        """Check if user can access specific feature"""
-        if not user.is_subscription_active():
-            return False
-        
-        # All premium features available during trial and paid subscription
-        premium_features = [
-            'unlimited_food_analysis',
-            'detailed_nutrition_reports', 
-            'meal_planning',
-            'advanced_recommendations',
-            'progress_tracking',
-            'priority_support'
-        ]
-        
-        return feature in premium_features
-
-# Food Analysis Services
-class FoodAnalysisService:
-    @staticmethod
-    def _get_google_cloud_credentials():
-        """Get Google Cloud credentials from environment"""
-        try:
-            # Try to get credentials from GOOGLE_APPLICATION_CREDENTIALS file
-            credentials_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-            if credentials_path and os.path.exists(credentials_path):
-                return service_account.Credentials.from_service_account_file(credentials_path)
-            
-            # Try to get from GOOGLE_CLOUD_KEY_JSON environment variable
-            key_json = os.environ.get('GOOGLE_CLOUD_KEY_JSON')
-            if key_json:
-                import json
-                key_data = json.loads(key_json)
-                return service_account.Credentials.from_service_account_info(key_data)
-            
-            # Fall back to default credentials (when running on Google Cloud)
-            from google.auth import default
-            credentials, project = default()
-            return credentials
-            
-        except Exception as e:
-            app.logger.error(f"Error getting Google Cloud credentials: {str(e)}")
-            return None
-
-    @staticmethod
-    def analyze_food_image(image_path, user_description=None):
-        """Analyze food from image using Gemini Vision as primary method"""
-        try:
-            app.logger.info("🤖 Starting Gemini Vision AI food analysis")
-            
-            # Primary: Vertex AI Gemini Vision (best accuracy and cost-effective)
-            if VERTEX_AI_AVAILABLE:
-                gemini_result = FoodAnalysisService._analyze_image_with_gemini_vision(image_path, user_description)
-                if gemini_result and gemini_result.get('confidence_score', 0) > 0.7:
-                    app.logger.info("✅ Gemini Vision analysis successful")
-                    return gemini_result
-                else:
-                    app.logger.warning("⚠️ Gemini Vision low confidence, trying enhanced fallback")
-            
-            # Fallback: Enhanced estimation based on any available analysis
-            app.logger.info("🔄 Using enhanced nutrition estimation")
-            enhanced_result = FoodAnalysisService._generate_nutrition_estimate(
-                user_description or "Mixed food dish", 0.6
-            )
-            enhanced_result['analysis_method'] = 'enhanced_fallback'
-            return enhanced_result
-                
-        except Exception as e:
-            app.logger.error(f"Food analysis error: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("Food analysis", user_description)
-
-    @staticmethod
-    def _analyze_image_with_google_vision(image_path, user_description=None):
-        """DEPRECATED: Legacy method - now redirects to Gemini Vision"""
-        app.logger.warning("⚠️ Using deprecated Google Vision method - redirecting to Gemini Vision")
-        return FoodAnalysisService._analyze_image_with_gemini_vision(image_path, user_description)
-
-    @staticmethod
-    def _analyze_image_with_gemini_vision(image_path, user_description=None):
-        """Analyze image using Vertex AI Gemini Vision with custom prompts"""
-        try:
-            app.logger.info("🤖 Starting Vertex AI Gemini Vision analysis with custom prompt")
-            
-            # Initialize Vertex AI
-            credentials = FoodAnalysisService._get_google_cloud_credentials()
-            if not credentials:
-                app.logger.warning("No Google Cloud credentials for Vertex AI")
+            access_token = app.config['MERCADO_PAGO_ACCESS_TOKEN']
+            if not access_token:
                 return None
             
-            # Get project ID from credentials
-            if hasattr(credentials, 'service_account_email'):
-                project_id = credentials.service_account_email.split('@')[1].split('.')[0]
-            else:
-                # Try to get from environment
-                with open(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), 'r') as f:
-                    cred_data = json.load(f)
-                    project_id = cred_data.get('project_id')
-            
-            if not project_id:
-                app.logger.warning("Could not determine project ID for Vertex AI")
-                return None
-            
-            # Initialize Vertex AI
-            vertexai.init(project=project_id, location="us-central1", credentials=credentials)
-            
-            # Create the enhanced prompt for food analysis
-            food_analysis_prompt = f"""
-            You are a professional nutritionist analyzing this food image. Provide a detailed, precise description suitable for accurate nutritional analysis.
-
-            **Analysis Requirements:**
-            1. **Primary Foods** with specific weights:
-               - Proteins: meat/fish/eggs type and estimated grams (e.g., "150g grilled chicken breast")
-               - Vegetables: specific types and portions (e.g., "100g steamed broccoli florets")
-               - Carbohydrates: starches with amounts (e.g., "120g roasted sweet potato")
-               - Dairy: cheese, milk products with estimated amounts
-               - Fats: visible oils, nuts, avocado with quantities
-
-            2. **Cooking Methods**: Be specific (baked, grilled, fried, steamed, raw, sautéed, etc.)
-
-            3. **Food Quality Indicators**:
-               - Fresh vs. processed
-               - Whole foods vs. refined
-               - Added fats or oils visible
-               - Seasoning level (light, moderate, heavy)
-
-            4. **Portion Assessment**:
-               - Single serving vs. multiple servings
-               - Restaurant vs. home-cooked portions
-               - Total estimated weight of the dish
-
-            5. **Nutritional Context**:
-               - High-protein, high-carb, high-fat, or balanced meal
-               - Estimated calorie density (light, moderate, heavy)
-
-            **Response Format:**
-            Provide ONE comprehensive sentence describing the complete dish with estimated weights.
-            
-            **Example Response:**
-            "Baked whole salmon fillet (180g) with roasted Brussels sprouts (100g), sweet potato cubes (120g), crumbled feta cheese (30g), and olive oil drizzle (1 tablespoon), served as a balanced single-serving dinner plate"
-
-            **User Context:** {user_description if user_description else "No additional context provided"}
-
-            **Important:** Be specific with weights and cooking methods for accurate nutritional calculation.
-            """
-            
-            # Load and prepare the image
-            with open(image_path, 'rb') as image_file:
-                image_data = image_file.read()
-            
-            # Create Vertex AI image part
-            image_part = Part.from_data(image_data, mime_type="image/jpeg")
-            
-            # Initialize Gemini Vision model (updated to latest available version)
-            model = GenerativeModel("gemini-2.5-flash")
-            
-            # Generate response
-            app.logger.info("🔍 Sending image and prompt to Gemini Vision...")
-            response = model.generate_content([food_analysis_prompt, image_part])
-            
-            if not response or not response.text:
-                app.logger.warning("Empty response from Gemini Vision")
-                return None
-            
-            # Extract the food description from response
-            food_description = response.text.strip()
-            app.logger.info(f"🤖 Gemini Vision analysis: {food_description[:100]}...")
-            
-            # Use the Gemini description for nutritional analysis
-            nutrition_data = FoodAnalysisService._get_nutrition_from_spoonacular(food_description)
-            
-            if nutrition_data:
-                # Calculate confidence based on description quality
-                word_count = len(food_description.split())
-                has_weights = any(unit in food_description.lower() for unit in ['g', 'gram', 'kg', 'cup', 'tablespoon', 'teaspoon'])
-                has_cooking_method = any(method in food_description.lower() for method in ['baked', 'grilled', 'fried', 'steamed', 'roasted', 'raw'])
-                
-                base_confidence = 0.9
-                if word_count >= 15:
-                    base_confidence += 0.05
-                if has_weights:
-                    base_confidence += 0.03
-                if has_cooking_method:
-                    base_confidence += 0.02
-                
-                nutrition_data['confidence_score'] = min(base_confidence, 0.98)  # Cap at 98%
-                nutrition_data['food_name'] = food_description
-                nutrition_data['analysis_method'] = 'gemini_vision_prompt'
-                app.logger.info(f"✅ Gemini Vision analysis successful with {nutrition_data['confidence_score']:.1%} confidence")
-                return nutrition_data
-            else:
-                # Generate enhanced nutrition based on Gemini description with better estimation
-                app.logger.info(f"📊 Spoonacular lookup failed, using enhanced estimation for: {food_description[:100]}...")
-                enhanced_nutrition = FoodAnalysisService._generate_nutrition_estimate(food_description, 0.85)
-                enhanced_nutrition['analysis_method'] = 'gemini_vision_enhanced_estimate'
-                return enhanced_nutrition
-                
-        except Exception as e:
-            app.logger.error(f"Vertex AI Gemini Vision error: {str(e)}")
-            app.logger.error(f"Error details: {type(e).__name__}: {str(e)}")
-            return None
-
-    @staticmethod
-    def _build_food_description(labels, objects, texts, user_description=None):
-        """DEPRECATED: Legacy method for basic Vision API - use Gemini Vision instead"""
-        app.logger.warning("⚠️ Using deprecated _build_food_description - Gemini Vision recommended")
-        if user_description:
-            return user_description.strip()
-        return "Mixed food dish"
-
-    @staticmethod  
-    def _calculate_vision_confidence(labels, objects, texts):
-        """DEPRECATED: Legacy method for basic Vision API - use Gemini Vision instead"""
-        app.logger.warning("⚠️ Using deprecated _calculate_vision_confidence - Gemini Vision recommended")
-        return 0.5  # Default confidence for deprecated method
-
-    @staticmethod
-    def _analyze_image_with_spoonacular(image_path, user_description=None):
-        """DEPRECATED: Spoonacular image analysis - Gemini Vision is more accurate and cost-effective"""
-        app.logger.warning("⚠️ Using deprecated Spoonacular image analysis - Gemini Vision recommended")
-        try:
-            api_key = app.config['SPOONACULAR_API_KEY']
-            if not api_key:
-                app.logger.warning("No Spoonacular API key configured")
-                return None
-            
-            # Enhanced image preprocessing for better recognition
-            processed_image_path = FoodAnalysisService._preprocess_image(image_path)
-            
-            # Read and encode the processed image
-            with open(processed_image_path, 'rb') as img_file:
-                img_data = base64.b64encode(img_file.read()).decode()
-            
-            # Try different Spoonacular endpoints for better recognition
-            endpoints = [
-                "https://api.spoonacular.com/food/images/analyze",
-                "https://api.spoonacular.com/food/images/classify"
-            ]
-            
-            for endpoint in endpoints:
-                try:
-                    app.logger.info(f"Trying Spoonacular endpoint: {endpoint}")
-                    
-                    headers = {"Content-Type": "application/json"}
-                    data = {
-                        "imageBase64": img_data,
-                        "apiKey": api_key
-                    }
-                    
-                    response = requests.post(endpoint, headers=headers, json=data, timeout=30)
-                    app.logger.info(f"Spoonacular API status: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        app.logger.info(f"Spoonacular API response: {result}")
-                        
-                        # Check if we got meaningful results
-                        if FoodAnalysisService._is_valid_spoonacular_response(result):
-                            processed_result = FoodAnalysisService._process_spoonacular_response(result, user_description)
-                            # Clean up processed image
-                            if processed_image_path != image_path:
-                                os.remove(processed_image_path)
-                            return processed_result
-                        else:
-                            app.logger.warning(f"Invalid Spoonacular response from {endpoint}")
-                    else:
-                        app.logger.error(f"Spoonacular API error {endpoint}: {response.status_code} - {response.text}")
-                
-                except requests.exceptions.RequestException as e:
-                    app.logger.error(f"Network error with {endpoint}: {str(e)}")
-                    continue
-            
-            # Clean up processed image
-            if processed_image_path != image_path and os.path.exists(processed_image_path):
-                os.remove(processed_image_path)
-                
-            return None
-                
-        except Exception as e:
-            app.logger.error(f"Spoonacular analysis error: {str(e)}")
-            return None
-
-    @staticmethod
-    def _get_nutrition_from_spoonacular(food_name):
-        """Get nutritional data from Spoonacular for identified food"""
-        try:
-            api_key = app.config['SPOONACULAR_API_KEY']
-            if not api_key:
-                return None
-                
-            # Use Spoonacular's recipe/ingredient parsing for nutrition
-            url = f"https://api.spoonacular.com/recipes/parseIngredients"
-            params = {
-                "ingredientList": food_name,
-                "servings": 1,
-                "includeNutrition": True,
-                "apiKey": api_key
+            url = f"https://api.mercadopago.com/preapproval/{subscription_id}"
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
             }
             
-            response = requests.post(url, params=params, timeout=30)
+            response = requests.get(url, headers=headers, timeout=30)
             
             if response.status_code == 200:
-                results = response.json()
-                if results and len(results) > 0:
-                    return FoodAnalysisService._process_ingredient_response(results[0], food_name)
-            
-            return None
-            
-        except Exception as e:
-            app.logger.error(f"Spoonacular nutrition lookup error: {str(e)}")
-            return None
-
-    @staticmethod
-    def _generate_nutrition_estimate(food_name, confidence):
-        """Generate estimated nutrition when APIs fail - enhanced for Gemini descriptions"""
-        # Enhanced keyword-based estimation that extracts weights from Gemini descriptions
-        food_lower = food_name.lower()
-        
-        # More comprehensive calorie estimates per 100g
-        calorie_per_100g = {
-            'fish': 200, 'salmon': 220, 'tuna': 130, 'cod': 90, 'sea bass': 120,
-            'broccoli': 25, 'carrot': 25, 'spinach': 20, 'lettuce': 15, 'tomato': 18,
-            'cucumber': 15, 'bell pepper': 25, 'onion': 40, 'garlic': 150, 'potato': 160,
-            'sweet potato': 100, 'corn': 90, 'green beans': 35, 'peas': 80,
-            'chicken': 250, 'beef': 300, 'pork': 280, 'turkey': 200, 'bacon': 540,
-            'egg': 155, 'cheese': 350, 'milk': 60, 'yogurt': 100, 'butter': 720,
-            'bread': 250, 'rice': 130, 'pasta': 350, 'pizza': 300,
-            'nuts': 600, 'almonds': 580, 'peanuts': 560, 'cashews': 550,
-            'avocado': 160, 'olive oil': 880, 'coconut': 350
-        }
-        
-        total_calories = 0
-        total_protein = 0
-        total_carbs = 0
-        total_fat = 0
-        
-        # Extract weights and calculate nutrition based on Gemini's detailed descriptions
-        import re
-        
-        # Find weight patterns like "180g", "100g", "25g"
-        weight_matches = re.findall(r'(\d+)\s*g?\s*([a-zA-Z\s]+)', food_lower)
-        
-        if weight_matches:
-            app.logger.info(f"🔍 Extracting nutrition from weights: {weight_matches}")
-            for weight_str, ingredient in weight_matches:
-                try:
-                    weight = int(weight_str)
-                    ingredient = ingredient.strip()
-                    
-                    # Find matching ingredient
-                    cal_per_100g = 100  # default
-                    for food_key, cal_value in calorie_per_100g.items():
-                        if food_key in ingredient:
-                            cal_per_100g = cal_value
-                            break
-                    
-                    # Calculate nutrition based on weight
-                    calories = (cal_per_100g * weight) / 100
-                    total_calories += calories
-                    
-                    # Estimate macros based on food type
-                    if any(protein_food in ingredient for protein_food in ['fish', 'chicken', 'beef', 'cheese', 'egg']):
-                        total_protein += calories * 0.2 / 4  # 20% protein
-                        total_fat += calories * 0.1 / 9  # 10% fat
-                        total_carbs += calories * 0.05 / 4  # 5% carbs
-                    elif any(carb_food in ingredient for carb_food in ['potato', 'rice', 'bread', 'pasta']):
-                        total_carbs += calories * 0.8 / 4  # 80% carbs
-                        total_protein += calories * 0.1 / 4  # 10% protein
-                        total_fat += calories * 0.02 / 9  # 2% fat
-                    elif any(veg_food in ingredient for veg_food in ['broccoli', 'tomato', 'carrot', 'spinach']):
-                        total_carbs += calories * 0.7 / 4  # 70% carbs
-                        total_protein += calories * 0.25 / 4  # 25% protein
-                        total_fat += calories * 0.05 / 9  # 5% fat
-                    else:
-                        # Balanced macro split
-                        total_protein += calories * 0.15 / 4
-                        total_carbs += calories * 0.55 / 4
-                        total_fat += calories * 0.30 / 9
-                        
-                except ValueError:
-                    continue
-            
-            app.logger.info(f"📊 Calculated from weights: {total_calories:.0f} kcal, {total_protein:.1f}g protein")
-        else:
-            # Fallback to simple keyword matching
-            estimated_calories = 300  # default for complete meal
-            
-            # Find best match
-            for keyword, calories in calorie_per_100g.items():
-                if keyword in food_lower:
-                    estimated_calories = calories
-                    break
-            
-            total_calories = estimated_calories
-            total_protein = estimated_calories * 0.15 / 4  # 15% protein
-            total_carbs = estimated_calories * 0.55 / 4    # 55% carbs  
-            total_fat = estimated_calories * 0.30 / 9      # 30% fat
-        
-        return {
-            'food_name': food_name,
-            'calories': max(total_calories, 50),  # Minimum 50 calories
-            'protein': max(total_protein, 1),     # Minimum 1g protein
-            'carbs': max(total_carbs, 5),         # Minimum 5g carbs
-            'fat': max(total_fat, 1),             # Minimum 1g fat
-            'fiber': 3,
-            'sodium': 100,
-            'confidence_score': confidence,
-            'food_score': FoodAnalysisService._calculate_food_score(
-                total_calories, total_protein, 3, 100
-            )
-        }
-
-    @staticmethod
-    def analyze_food_text(text_description):
-        """Analyze food from text description using Spoonacular API"""
-        try:
-            api_key = app.config['SPOONACULAR_API_KEY']
-            if not api_key:
-                return FoodAnalysisService._fallback_analysis("Text analysis", text_description)
-            
-            # Use Spoonacular's recipe/ingredient parsing
-            url = f"https://api.spoonacular.com/recipes/parseIngredients"
-            params = {
-                "ingredientList": text_description,
-                "servings": 1,
-                "includeNutrition": True,
-                "apiKey": api_key
-            }
-            
-            response = requests.post(url, params=params, timeout=30)
-            
-            if response.status_code == 200:
-                results = response.json()
-                if results and len(results) > 0:
-                    return FoodAnalysisService._process_ingredient_response(results[0], text_description)
-            
-            return FoodAnalysisService._fallback_analysis("Text analysis", text_description)
-            
-        except Exception as e:
-            app.logger.error(f"Text analysis error: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("Text analysis", text_description)
-    
-    @staticmethod
-    def analyze_food_voice(audio_file_path):
-        """Analyze food from voice using Google Cloud Speech-to-Text then text analysis"""
-        try:
-            app.logger.info("🎤 Starting Google Cloud Speech-to-Text analysis")
-            
-            # Try Google Cloud Speech-to-Text first
-            if GOOGLE_CLOUD_AVAILABLE:
-                transcribed_text = FoodAnalysisService._transcribe_audio_with_google(audio_file_path)
-                if transcribed_text:
-                    app.logger.info(f"✅ Google Speech transcription: '{transcribed_text}'")
-                    # Analyze the transcribed text
-                    return FoodAnalysisService.analyze_food_text(transcribed_text)
-            
-            # Fallback to basic response
-            app.logger.warning("⚠️ Google Cloud Speech not available")
-            return FoodAnalysisService._fallback_analysis("Voice analysis", "voice message - please describe your food in text")
-            
-        except Exception as e:
-            app.logger.error(f"Voice analysis error: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("Voice analysis", "audio file")
-
-    @staticmethod
-    def _transcribe_audio_with_google(audio_file_path):
-        """Transcribe audio using Google Cloud Speech-to-Text"""
-        try:
-            credentials = FoodAnalysisService._get_google_cloud_credentials()
-            if not credentials:
-                app.logger.warning("No Google Cloud credentials available for speech")
+                return response.json()
+            else:
+                app.logger.error(f"Error getting subscription details: {response.status_code} - {response.text}")
                 return None
                 
-            # Initialize Speech client
-            client = speech.SpeechClient(credentials=credentials)
-            
-            # Read audio file
-            with open(audio_file_path, 'rb') as audio_file:
-                content = audio_file.read()
-            
-            # Configure recognition
-            audio = speech.RecognitionAudio(content=content)
-            config = speech.RecognitionConfig(
-                encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,  # Try different encodings
-                sample_rate_hertz=16000,
-                language_code="en-US",
-                alternative_language_codes=["en-GB", "es-ES", "fr-FR"],  # Multi-language support
-                enable_automatic_punctuation=True,
-                enable_word_confidence=True,
-                model="latest_long"  # Best model for general use
-            )
-            
-            # Perform recognition
-            response = client.recognize(config=config, audio=audio)
-            
-            # Process results
-            for result in response.results:
-                if result.alternatives:
-                    transcript = result.alternatives[0].transcript
-                    confidence = result.alternatives[0].confidence
-                    app.logger.info(f"🎯 Speech recognition: '{transcript}' (confidence: {confidence:.2f})")
-                    return transcript
-            
-            app.logger.warning("No speech recognized by Google Cloud")
+        except Exception as e:
+            app.logger.error(f"Error fetching subscription details: {str(e)}")
             return None
-            
-        except Exception as e:
-            app.logger.error(f"Google Cloud Speech error: {str(e)}")
-            # Try with different audio encoding
-            try:
-                # Alternative encoding attempt
-                config = speech.RecognitionConfig(
-                    encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-                    sample_rate_hertz=44100,
-                    language_code="en-US"
-                )
-                response = client.recognize(config=config, audio=audio)
-                for result in response.results:
-                    if result.alternatives:
-                        return result.alternatives[0].transcript
-            except:
-                pass
-            
-            return None
-    
-    @staticmethod
-    def _process_spoonacular_response(spoonacular_data, user_description=None):
-        """Process Spoonacular API response and extract nutrition data"""
-        try:
-            # Extract nutrition information from Spoonacular response
-            nutrition = spoonacular_data.get('nutrition', {})
-            nutrients = nutrition.get('nutrients', [])
-            
-            # Map nutrients by name
-            nutrient_map = {}
-            for nutrient in nutrients:
-                nutrient_map[nutrient.get('name', '').lower()] = nutrient.get('amount', 0)
-            
-            food_name = spoonacular_data.get('category', {}).get('name', 'Unknown food')
-            if user_description:
-                food_name = user_description
-            
-            return {
-                'food_name': food_name,
-                'calories': nutrient_map.get('calories', 0),
-                'protein': nutrient_map.get('protein', 0),
-                'carbs': nutrient_map.get('carbohydrates', 0),
-                'fat': nutrient_map.get('fat', 0),
-                'fiber': nutrient_map.get('fiber', 0),
-                'sodium': nutrient_map.get('sodium', 0),
-                'confidence_score': spoonacular_data.get('confidence', 0.7),
-                'food_score': FoodAnalysisService._calculate_food_score(
-                    nutrient_map.get('calories', 0),
-                    nutrient_map.get('protein', 0),
-                    nutrient_map.get('fiber', 0),
-                    nutrient_map.get('sodium', 0)
-                )
-            }
-        except Exception as e:
-            app.logger.error(f"Error processing Spoonacular response: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("API analysis", user_description)
-    
-    @staticmethod
-    def _process_ingredient_response(ingredient_data, text_description):
-        """Process Spoonacular ingredient parsing response"""
-        try:
-            nutrition = ingredient_data.get('nutrition', {})
-            nutrients = nutrition.get('nutrients', [])
-            
-            # Map nutrients by name
-            nutrient_map = {}
-            for nutrient in nutrients:
-                nutrient_map[nutrient.get('name', '').lower()] = nutrient.get('amount', 0)
-            
-            food_name = ingredient_data.get('name', text_description)
-            
-            return {
-                'food_name': food_name,
-                'calories': nutrient_map.get('calories', 0),
-                'protein': nutrient_map.get('protein', 0),
-                'carbs': nutrient_map.get('carbohydrates', 0),
-                'fat': nutrient_map.get('fat', 0),
-                'fiber': nutrient_map.get('fiber', 0),
-                'sodium': nutrient_map.get('sodium', 0),
-                'confidence_score': 0.8,
-                'food_score': FoodAnalysisService._calculate_food_score(
-                    nutrient_map.get('calories', 0),
-                    nutrient_map.get('protein', 0),
-                    nutrient_map.get('fiber', 0),
-                    nutrient_map.get('sodium', 0)
-                )
-            }
-        except Exception as e:
-            app.logger.error(f"Error processing ingredient response: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("Ingredient analysis", text_description)
-    
-    @staticmethod
-    def _fallback_analysis(analysis_type, description):
-        """Fallback analysis when APIs fail"""
-        # Simple keyword-based estimation
-        description_lower = (description or "").lower()
-        
-        # Basic calorie estimates based on keywords
-        calorie_estimates = {
-            'soup': 200, 'salad': 150, 'pizza': 300, 'burger': 500,
-            'sandwich': 350, 'pasta': 400, 'rice': 200, 'bread': 80,
-            'apple': 80, 'banana': 105, 'orange': 60, 'strawberry': 32, 'strawberries': 32,
-            'chicken': 250, 'beef': 300, 'fish': 200, 'vegetables': 50, 'cheese': 100,
-            'berry': 40, 'berries': 40, 'fruit': 60, 'yogurt': 100, 'nuts': 200
-        }
-        
-        estimated_calories = 250  # default
-        food_name = description or "food item"
-        
-        # If it's image analysis and no description, use a more helpful message
-        if analysis_type == "Image analysis" and not description:
-            food_name = "food item (couldn't identify automatically)"
-            estimated_calories = 100  # Lower default for unknown items
-        
-        for keyword, calories in calorie_estimates.items():
-            if keyword in description_lower:
-                estimated_calories = calories
-                if keyword in ['strawberry', 'strawberries']:
-                    food_name = "strawberries"
-                elif keyword in ['apple']:
-                    food_name = "apple"  
-                elif keyword in ['banana']:
-                    food_name = "banana"
-                elif keyword in ['berry', 'berries']:
-                    food_name = "mixed berries"
-                else:
-                    food_name = keyword
-                break
-        
-        return {
-            'food_name': food_name,
-            'calories': estimated_calories,
-            'protein': estimated_calories * 0.15 / 4,  # rough estimate
-            'carbs': estimated_calories * 0.55 / 4,
-            'fat': estimated_calories * 0.30 / 9,
-            'fiber': 3,
-            'sodium': 400,
-            'confidence_score': 0.3,  # low confidence for fallback
-            'food_score': 3
-        }
-    
-    @staticmethod
-    def _calculate_food_score(calories, protein, fiber, sodium):
-        """Calculate food health score (1-5 scale)"""
-        score = 3  # baseline
-        
-        # High protein bonus
-        if protein > 20:
-            score += 1
-        elif protein > 10:
-            score += 0.5
-        
-        # High fiber bonus
-        if fiber > 5:
-            score += 1
-        elif fiber > 3:
-            score += 0.5
-        
-        # High sodium penalty
-        if sodium > 800:
-            score -= 1
-        elif sodium > 500:
-            score -= 0.5
-        
-        # High calorie penalty for single serving
-        if calories > 600:
-            score -= 1
-        elif calories > 400:
-            score -= 0.5
-        
-        return max(1, min(5, round(score)))
 
-    @staticmethod
-    def _preprocess_image(image_path):
-        """Preprocess image for better API recognition"""
-        try:
-            from PIL import Image, ImageEnhance, ImageFilter
-            
-            # Open and enhance the image
-            with Image.open(image_path) as img:
-                # Convert to RGB if needed
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                
-                # Resize to optimal size for recognition (not too small, not too large)
-                max_size = 800
-                if max(img.size) > max_size:
-                    ratio = max_size / max(img.size)
-                    new_size = tuple(int(dim * ratio) for dim in img.size)
-                    img = img.resize(new_size, Image.Resampling.LANCZOS)
-                
-                # Enhance contrast and sharpness for better recognition
-                enhancer = ImageEnhance.Contrast(img)
-                img = enhancer.enhance(1.2)
-                
-                enhancer = ImageEnhance.Sharpness(img)
-                img = enhancer.enhance(1.1)
-                
-                # Create processed image path
-                base_name = os.path.splitext(image_path)[0]
-                processed_path = f"{base_name}_processed.jpg"
-                
-                # Save processed image
-                img.save(processed_path, 'JPEG', quality=90)
-                
-                return processed_path
-                
-        except Exception as e:
-            app.logger.warning(f"Image preprocessing failed: {str(e)}, using original")
-            return image_path
-    
-    @staticmethod
-    def _is_valid_spoonacular_response(response_data):
-        """Check if Spoonacular response contains meaningful food recognition"""
-        if not response_data:
-            return False
-            
-        # Check for meaningful food category
-        category = response_data.get('category', {})
-        if isinstance(category, dict):
-            name = category.get('name', '').lower()
-            probability = category.get('probability', 0)
-            
-            # Require minimum confidence and avoid generic categories
-            if probability > 0.3 and name and name not in ['food', 'unknown', 'other']:
-                return True
-        
-        # Check for nutrition data as alternative validation
-        nutrition = response_data.get('nutrition', {})
-        if nutrition and nutrition.get('nutrients'):
-            return True
-            
-        return False
-    
-    @staticmethod
-    def _enhanced_image_fallback(image_path, user_description):
-        """Enhanced fallback using basic image analysis and context clues"""
-        try:
-            from PIL import Image
-            import colorsys
-            
-            # Analyze image colors to guess food type
-            with Image.open(image_path) as img:
-                # Convert to RGB and get dominant colors
-                rgb_img = img.convert('RGB')
-                
-                # Sample colors from center region (where food usually is)
-                width, height = rgb_img.size
-                center_box = (
-                    width // 4, height // 4,
-                    3 * width // 4, 3 * height // 4
-                )
-                center_region = rgb_img.crop(center_box)
-                
-                # Get average color
-                pixels = list(center_region.getdata())
-                avg_r = sum(p[0] for p in pixels) / len(pixels)
-                avg_g = sum(p[1] for p in pixels) / len(pixels)
-                avg_b = sum(p[2] for p in pixels) / len(pixels)
-                
-                # Convert to HSV for better food type detection
-                h, s, v = colorsys.rgb_to_hsv(avg_r/255, avg_g/255, avg_b/255)
-                h_degrees = h * 360
-                
-                # Color-based food guessing
-                food_name = "food item"
-                calories = 100
-                
-                # Red/pink range (strawberries, tomatoes, apples)
-                if 340 <= h_degrees <= 360 or 0 <= h_degrees <= 20:
-                    if s > 0.4:  # Bright red
-                        food_name = "strawberries"
-                        calories = 32
-                        app.logger.info("Color analysis suggests strawberries")
-                    else:
-                        food_name = "apple"
-                        calories = 80
-                
-                # Orange range (oranges, carrots)
-                elif 20 <= h_degrees <= 40:
-                    food_name = "orange"
-                    calories = 60
-                
-                # Yellow range (bananas, corn)
-                elif 40 <= h_degrees <= 70:
-                    food_name = "banana"
-                    calories = 105
-                
-                # Green range (vegetables, salads)
-                elif 70 <= h_degrees <= 150:
-                    food_name = "leafy greens"
-                    calories = 25
-                
-                # Use user description if provided and makes sense
-                if user_description and len(user_description.strip()) > 0:
-                    desc_lower = user_description.lower()
-                    # Check if description matches known foods
-                    food_keywords = {
-                        'strawberry': ('strawberries', 32),
-                        'strawberries': ('strawberries', 32),
-                        'apple': ('apple', 80),
-                        'banana': ('banana', 105),
-                        'orange': ('orange', 60),
-                        'salad': ('mixed salad', 50),
-                        'chicken': ('chicken', 250),
-                        'beef': ('beef', 300)
-                    }
-                    
-                    for keyword, (name, cals) in food_keywords.items():
-                        if keyword in desc_lower:
-                            food_name = name
-                            calories = cals
-                            app.logger.info(f"Using description-based analysis: {food_name}")
-                            break
-                
-                return {
-                    'food_name': food_name,
-                    'calories': calories,
-                    'protein': calories * 0.15 / 4,
-                    'carbs': calories * 0.55 / 4,
-                    'fat': calories * 0.30 / 9,
-                    'fiber': 3,
-                    'sodium': 400,
-                    'confidence_score': 0.4,  # Medium confidence for enhanced fallback
-                    'food_score': 3
-                }
-                
-        except Exception as e:
-            app.logger.error(f"Enhanced fallback error: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("Enhanced image analysis", user_description)
+# ===== END: Simplified services =====
 
-# Utility Services
+# Mercado Pago and Subscription Services - using new modular services
+from services.database_service import DatabaseService
+from handlers.food_analysis_handlers import FoodAnalysisHandler
+
+# Utility Services - now using modular services
 class DailyStatsService:
     @staticmethod
     def update_daily_stats(user_id, food_log):
@@ -1708,35 +719,21 @@ def create_subscription():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        # Check if user already has active subscription
-        if user.is_subscription_active():
-            return jsonify({'error': 'User already has active subscription'}), 400
-        
-        # Generate success and cancel URLs
-        success_url = f"https://caloria.vip/subscription-success?user={user.id}&ref={user.whatsapp_id}"
-        cancel_url = f"https://caloria.vip/subscription-cancel?user={user.id}"
-        
-        # Create Mercado Pago subscription link
-        payment_link = MercadoPagoService.create_subscription_link(user, success_url, cancel_url)
-        
-        if not payment_link:
-            return jsonify({'error': 'Failed to create payment link'}), 500
-        
-        # Update user status to indicate subscription is pending
-        user.subscription_status = 'trial_pending'
-        db.session.commit()
-        
-        return jsonify({
-            'payment_link': payment_link,
-            'plan_type': plan_type,
-            'user_id': user.id,
-            'trial_days': app.config['SUBSCRIPTION_TRIAL_DAYS'],
-            'success': True
-        })
+        # Use new modular webhook router to handle subscription creation
+        try:
+            response_data, status_code = webhook_router.route_webhook('subscription_create', {
+                'user_id': user.id,
+                'plan_type': plan_type
+            })
+            return jsonify(response_data), status_code
+        except Exception as e:
+            app.logger.error(f"Error creating subscription: {str(e)}")
+            return jsonify({'error': 'Failed to create subscription'}), 500
         
     except Exception as e:
         app.logger.error(f"Error creating subscription: {str(e)}")
         return jsonify({'error': 'Failed to create subscription'}), 500
+
 def handle_subscription_webhook(subscription_id, action):
     """Process subscription webhook events - FIXED format"""
     try:
@@ -1746,7 +743,7 @@ def handle_subscription_webhook(subscription_id, action):
         
         app.logger.info(f"Processing subscription webhook: {subscription_id}, action: {action}")
         
-        # Get subscription details from Mercado Pago using correct endpoint
+        # Get subscription details from Mercado Pago API
         subscription_details = MercadoPagoService.get_subscription_details(subscription_id)
         if not subscription_details:
             app.logger.error(f"Could not get subscription details for {subscription_id}")
@@ -2078,736 +1075,140 @@ def admin_user_detail(user_id):
 @rate_limiting_service.limiter.limit("100 per minute")
 def manychat_webhook():
     """Handle incoming webhooks from ManyChat using modular handlers"""
-    with LogTimer("manychat_webhook_processing"):
-        try:
-            # Validate and sanitize input
-            request_data = request.get_json()
-            errors, sanitized_data = ValidationService.validate_webhook_input(request_data)
-            
-            if errors:
-                caloria_logger.warning("Webhook validation failed", extra={
-                    "category": "webhook",
-                    "errors": errors,
-                    "data": request_data
-                })
-                return jsonify({
-                    "version": "v2",
-                    "content": {
-                        "type": "text", 
-                        "text": "❌ Invalid request data"
-                    }
-                }), StatusCodes.BAD_REQUEST
-            
-            # Track webhook metrics
-            webhook_metrics.increment_counter('manychat_webhook_received')
-            webhook_metrics.track_timing('manychat_processing_start', time.time())
-            
-            # Route to appropriate handler
-            response_data, status_code = webhook_router.route_webhook('manychat', sanitized_data)
-            
-            # Track response metrics
-            webhook_metrics.increment_counter(f'manychat_response_{status_code}')
-            
-            caloria_logger.info("ManyChat webhook processed successfully", extra={
-                "category": "webhook",
-                "status_code": status_code,
-                "subscriber_id": sanitized_data.get('subscriber_id')
-            })
-            
-            return jsonify(response_data), status_code
-            
-        except CaloriaException as e:
-            webhook_metrics.increment_error('manychat_webhook')
-            caloria_logger.error(f"ManyChat webhook error: {e.message}", extra={
-                "category": "webhook",
-                "error_code": e.error_code,
-                "details": e.details
+    import time
+    start_time = time.time()
+    
+    try:
+        # Validate and sanitize input
+        request_data = request.get_json()
+        errors, sanitized_data = ValidationService.validate_webhook_input(request_data)
+        
+        if errors:
+            caloria_logger.warning("Webhook validation failed", details={
+                "errors": errors,
+                "data": request_data
             })
             return jsonify({
                 "version": "v2",
-                "content": {"type": "text", "text": "❌ Service temporarily unavailable"}
-            }), StatusCodes.INTERNAL_SERVER_ERROR
-            
-        except Exception as e:
-            webhook_metrics.increment_error('manychat_webhook')
-            caloria_logger.error(f"Unexpected webhook error: {str(e)}", extra={
-                "category": "webhook",
-                "error": str(e)
-            })
-            return jsonify({
-                "version": "v2", 
-                "content": {"type": "text", "text": "❌ Unexpected error occurred"}
-            }), StatusCodes.INTERNAL_SERVER_ERROR
+                "content": {
+                    "type": "text", 
+                    "text": "❌ Invalid request data"
+                }
+            }), StatusCodes.BAD_REQUEST
+        
+        # Track webhook metrics
+        user_id = sanitized_data.get('id', 'unknown')
+        webhook_metrics.record_webhook_received('manychat', user_id)
+        
+        # Route to appropriate handler
+        response_data, status_code = webhook_router.route_webhook('manychat', sanitized_data)
+        
+        # Track successful processing
+        processing_time_ms = (time.time() - start_time) * 1000
+        webhook_metrics.record_webhook_processed('manychat', True, processing_time_ms, user_id)
+        
+        caloria_logger.info("ManyChat webhook processed successfully", details={
+            "status_code": status_code,
+            "processing_time_ms": processing_time_ms,
+            "subscriber_id": sanitized_data.get('subscriber_id')
+        })
+        
+        return jsonify(response_data), status_code
+        
+    except CaloriaException as e:
+        processing_time_ms = (time.time() - start_time) * 1000
+        webhook_metrics.record_webhook_processed('manychat', False, processing_time_ms)
+        
+        caloria_logger.error(f"ManyChat webhook error: {e.message}", error=e, details={
+            "error_code": e.error_code,
+            "details": e.details
+        })
+        return jsonify({
+            "version": "v2",
+            "content": {"type": "text", "text": "❌ Service temporarily unavailable"}
+        }), StatusCodes.INTERNAL_SERVER_ERROR
+        
+    except Exception as e:
+        processing_time_ms = (time.time() - start_time) * 1000
+        webhook_metrics.record_webhook_processed('manychat', False, processing_time_ms)
+        
+        caloria_logger.error(f"Unexpected webhook error: {str(e)}", error=e)
+        return jsonify({
+            "version": "v2", 
+            "content": {"type": "text", "text": "❌ Unexpected error occurred"}
+        }), StatusCodes.INTERNAL_SERVER_ERROR
 
 # MercadoPago Webhook Routes
 @app.route('/webhook/mercadopago', methods=['POST'])
 @rate_limiting_service.limiter.limit("200 per minute")
 def mercadopago_webhook():
     """Handle Mercado Pago webhooks using modular handlers"""
-    with LogTimer("mercadopago_webhook_processing"):
-        try:
-            # Validate webhook signature
-            payload = request.get_data()
-            signature = request.headers.get('x-signature', '')
-            
-            if not SecurityService.verify_webhook_signature(payload, signature, app.config.get('MERCADO_PAGO_WEBHOOK_SECRET', '')):
-                caloria_logger.warning("Invalid MercadoPago webhook signature", extra={
-                    "category": "security",
-                    "signature": signature
-                })
-                return jsonify({'error': 'Invalid signature'}), StatusCodes.UNAUTHORIZED
-            
-            # Validate and sanitize input
-            request_data = request.get_json()
-            errors, sanitized_data = ValidationService.validate_mercadopago_webhook(request_data)
-            
-            if errors:
-                caloria_logger.warning("MercadoPago webhook validation failed", extra={
-                    "category": "webhook",
-                    "errors": errors
-                })
-                return jsonify({'error': 'Invalid webhook data'}), StatusCodes.BAD_REQUEST
-            
-            # Track webhook metrics
-            webhook_metrics.increment_counter('mercadopago_webhook_received')
-            
-            # Route to appropriate handler
-            response_data, status_code = webhook_router.route_webhook('mercadopago', sanitized_data)
-            
-            # Track response metrics
-            webhook_metrics.increment_counter(f'mercadopago_response_{status_code}')
-            
-            caloria_logger.info("MercadoPago webhook processed successfully", extra={
-                "category": "webhook",
-                "status_code": status_code,
-                "webhook_type": sanitized_data.get('type')
-            })
-            
-            return jsonify(response_data), status_code
-            
-        except CaloriaException as e:
-            webhook_metrics.increment_error('mercadopago_webhook')
-            caloria_logger.error(f"MercadoPago webhook error: {e.message}", extra={
-                "category": "webhook",
-                "error_code": e.error_code
-            })
-            return jsonify({'status': 'error'}), StatusCodes.INTERNAL_SERVER_ERROR
-            
-        except Exception as e:
-            webhook_metrics.increment_error('mercadopago_webhook')
-            caloria_logger.error(f"Unexpected MercadoPago webhook error: {str(e)}", extra={
-                "category": "webhook",
-                "error": str(e)
-            })
-            return jsonify({'status': 'error'}), StatusCodes.INTERNAL_SERVER_ERROR
-
-
-def handle_text_input(user, data):
-    """Handle text input from user"""
-    text = data.get('text', '')
-    
-    # Analyze text for food content
-    analysis_result = FoodAnalysisService.analyze_food_text(text)
-    
-    # Create food log
-    food_log = FoodLog(
-        user_id=user.id,
-        food_name=analysis_result['food_name'],
-        calories=analysis_result['calories'],
-        protein=analysis_result['protein'],
-        carbs=analysis_result['carbs'],
-        fat=analysis_result['fat'],
-        fiber=analysis_result['fiber'],
-        sodium=analysis_result['sodium'],
-        food_score=analysis_result['food_score'],
-        analysis_method='text',
-        raw_input=text,
-        confidence_score=analysis_result['confidence_score']
-    )
-    
-    db.session.add(food_log)
-    db.session.commit()
-    
-    # Update daily stats
-    daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
-    
-    # Format response message
-    response_text = format_analysis_response(analysis_result, daily_stats, user)
-    
-    # Get platform from request data, default to telegram
-    platform = data.get('platform', 'telegram')
-    
-    # Return ManyChat dynamic block format with External Message Callback for continued interaction
-    return jsonify({
-        "version": "v2",
-        "content": {
-            "type": platform,
-            "messages": [
-                {
-                    "type": "text",
-                    "text": response_text + "\n\n📸 Send another photo or 📝 describe more food to continue tracking!"
-                }
-            ],
-            "external_message_callback": {
-                "url": "https://caloria.vip/webhook/manychat",
-                "method": "post",
-                "payload": {
-                    "subscriber_id": "{{user_id}}",
-                    "first_name": "{{first_name}}",
-                    "last_name": "{{last_name}}",
-                    "message_text": "{{last_input_text}}",
-                    "attachment_url": "{{last_input_attachment_url}}",
-                    "message_type": "{{last_input_type}}"
-                },
-                "timeout": 3600
-            }
-        }
-    })
-
-def handle_image_input(user, data):
-    """Handle image input from user"""
-    # ENHANCED IMAGE URL EXTRACTION - Try multiple possible fields
-    image_url = None
-    url_source = None
-    
-    app.logger.info("🔍 Searching for image URL in webhook data...")
-    
-    # Check direct URL fields first
-    direct_url_fields = [
-        'image_url', 'url', 'attachment_url', 'media_url', 
-        'photo_url', 'file_url', 'document_url'
-    ]
-    
-    for field in direct_url_fields:
-        if data.get(field):
-            image_url = data.get(field)
-            url_source = field
-            app.logger.info(f"✅ Found image URL in '{field}': {image_url}")
-            break
-    
-    # Check attachments array
-    if not image_url and data.get('attachments'):
-        attachments = data.get('attachments')
-        app.logger.info(f"🔍 Checking attachments: {attachments}")
-        
-        if isinstance(attachments, list) and len(attachments) > 0:
-            # Get first attachment
-            attachment = attachments[0]
-            app.logger.info(f"📎 Processing attachment[0]: {attachment}")
-            
-            if isinstance(attachment, dict):
-                # Try various URL field names in the attachment
-                url_fields = ['url', 'image_url', 'file_url', 'media_url', 'photo_url', 'src', 'href', 'link']
-                for url_field in url_fields:
-                    if attachment.get(url_field):
-                        image_url = attachment.get(url_field)
-                        url_source = f'attachments[0].{url_field}'
-                        app.logger.info(f"✅ Found image URL in attachment: {url_source} = {image_url}")
-                        break
-            elif isinstance(attachment, str):
-                # Direct URL in attachment
-                image_url = attachment
-                url_source = 'attachments[0]'
-                app.logger.info(f"✅ Found direct URL in attachments[0]: {image_url}")
-        
-        elif isinstance(attachments, dict):
-            # Single attachment object
-            url_fields = ['url', 'image_url', 'file_url', 'media_url', 'photo_url', 'src', 'href', 'link']
-            for url_field in url_fields:
-                if attachments.get(url_field):
-                    image_url = attachments.get(url_field)
-                    url_source = f'attachments.{url_field}'
-                    app.logger.info(f"✅ Found image URL in attachments object: {url_source} = {image_url}")
-                    break
-    
-    # Check single attachment object
-    if not image_url and data.get('attachment'):
-        attachment = data.get('attachment')
-        app.logger.info(f"🔍 Checking single attachment: {attachment}")
-        
-        if isinstance(attachment, dict):
-            url_fields = ['url', 'image_url', 'file_url', 'media_url', 'photo_url', 'src', 'href', 'link']
-            for url_field in url_fields:
-                if attachment.get(url_field):
-                    image_url = attachment.get(url_field)
-                    url_source = f'attachment.{url_field}'
-                    app.logger.info(f"✅ Found image URL in attachment: {url_source} = {image_url}")
-                    break
-        elif isinstance(attachment, str):
-            image_url = attachment
-            url_source = 'attachment'
-            app.logger.info(f"✅ Found direct URL in attachment: {image_url}")
-    
-    # Check other media fields
-    if not image_url:
-        media_fields = ['media', 'photo', 'image', 'file', 'files', 'document']
-        for field in media_fields:
-            if data.get(field):
-                media_data = data.get(field)
-                app.logger.info(f"🔍 Checking media field '{field}': {media_data}")
-                
-                if isinstance(media_data, str):
-                    image_url = media_data
-                    url_source = field
-                    app.logger.info(f"✅ Found image URL in '{field}': {image_url}")
-                    break
-                elif isinstance(media_data, dict):
-                    url_fields = ['url', 'image_url', 'file_url', 'media_url', 'src', 'href', 'link']
-                    for url_field in url_fields:
-                        if media_data.get(url_field):
-                            image_url = media_data.get(url_field)
-                            url_source = f'{field}.{url_field}'
-                            app.logger.info(f"✅ Found image URL in '{field}.{url_field}': {image_url}")
-                            break
-                    if image_url:
-                        break
-    
-    # Final logging
-    if image_url:
-        app.logger.info(f"🎯 FINAL IMAGE URL: {image_url} (from: {url_source})")
-    else:
-        app.logger.error(f"❌ NO IMAGE URL FOUND")
-        app.logger.error(f"Available fields: {list(data.keys())}")
-        app.logger.error(f"Complete webhook data: {json.dumps(data, indent=2)}")
-    
-    user_text = data.get('text', '')  # Optional description
-    
-    if not image_url:
-        app.logger.error(f"No image URL found in webhook data")
-        return jsonify({
-            "version": "v2",
-            "content": {
-                "type": data.get('platform', 'telegram'),
-                "messages": [
-                    {
-                        "type": "text",
-                        "text": "❌ No image received. Please send a photo of your food!\n\n🔧 Debug: Image URL not found in webhook data."
-                    }
-                ]
-            }
-        }), 400
+    import time
+    start_time = time.time()
     
     try:
-        app.logger.info(f"📥 Downloading image from: {image_url}")
+        # Validate webhook signature
+        payload = request.get_data()
+        signature = request.headers.get('x-signature', '')
         
-        # Download and save image
-        response = requests.get(image_url, timeout=30)
-        if response.status_code == 200:
-            # Generate unique filename
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"food_{user.id}_{timestamp}.jpg"
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # Save image
-            with open(filepath, 'wb') as f:
-                f.write(response.content)
-            
-            app.logger.info(f"💾 Image saved to: {filepath}")
-            
-            # Analyze image
-            analysis_result = FoodAnalysisService.analyze_food_image(filepath, user_text)
-            
-            # If image analysis failed but we have user text, try text analysis as backup
-            if (analysis_result.get('confidence_score', 0) < 0.5 and 
-                user_text and len(user_text.strip()) > 0):
-                app.logger.info(f"Image analysis low confidence, trying text analysis with: '{user_text}'")
-                text_analysis = FoodAnalysisService.analyze_food_text(user_text)
-                # Use text analysis if it has higher confidence
-                if text_analysis.get('confidence_score', 0) > analysis_result.get('confidence_score', 0):
-                    analysis_result = text_analysis
-                    app.logger.info("Using text analysis result instead of image analysis")
-            
-            # Create food log
-            food_log = FoodLog(
-                user_id=user.id,
-                food_name=analysis_result['food_name'],
-                calories=analysis_result['calories'],
-                protein=analysis_result['protein'],
-                carbs=analysis_result['carbs'],
-                fat=analysis_result['fat'],
-                fiber=analysis_result['fiber'],
-                sodium=analysis_result['sodium'],
-                food_score=analysis_result['food_score'],
-                analysis_method='photo',
-                raw_input=user_text,
-                image_path=filepath,
-                confidence_score=analysis_result['confidence_score']
-            )
-            
-            db.session.add(food_log)
-            db.session.commit()
-            
-            # Update daily stats
-            daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
-            
-            # Format response message
-            response_text = format_analysis_response(analysis_result, daily_stats, user)
-            
-            # Get platform from request data, default to telegram
-            platform = data.get('platform', 'telegram')
-            
-            app.logger.info(f"✅ Image analysis completed successfully")
-            
-            # Return ManyChat dynamic block format with External Message Callback for continued interaction
-            return jsonify({
-                "version": "v2",
-                "content": {
-                    "type": platform,
-                    "messages": [
-                        {
-                            "type": "text",
-                            "text": response_text + "\n\n📸 Send another photo or 📝 describe more food to continue tracking!"
-                        }
-                    ],
-                    "external_message_callback": {
-                        "url": "https://caloria.vip/webhook/manychat",
-                        "method": "post",
-                        "payload": {
-                            "subscriber_id": "{{user_id}}",
-                            "first_name": "{{first_name}}",
-                            "last_name": "{{last_name}}",
-                            "message_text": "{{last_input_text}}",
-                            "attachment_url": "{{last_input_attachment_url}}",
-                            "message_type": "{{last_input_type}}"
-                        },
-                        "timeout": 3600
-                    }
-                }
+        if not SecurityService.verify_webhook_signature(payload, signature, app.config.get('MERCADO_PAGO_WEBHOOK_SECRET', '')):
+            caloria_logger.warning("Invalid MercadoPago webhook signature", details={
+                "signature": signature
             })
-        else:
-            app.logger.error(f"Failed to download image: HTTP {response.status_code}")
-            return jsonify({
-                "version": "v2",
-                "content": {
-                    "type": data.get('platform', 'telegram'),
-                    "messages": [
-                        {
-                            "type": "text",
-                            "text": f"❌ Could not download your image (HTTP {response.status_code}). Please try again!"
-                        }
-                    ]
-                }
-            }), 400
-            
-    except Exception as e:
-        app.logger.error(f"Image processing error: {str(e)}")
-        return jsonify({
-            "version": "v2",
-            "content": {
-                "type": data.get('platform', 'telegram'),
-                "messages": [
-                    {
-                        "type": "text",
-                        "text": f"❌ Error processing your image: {str(e)}. Please try again!"
-                    }
-                ]
-            }
-        }), 500
-
-def handle_audio_input(user, data):
-    """Handle audio input from user"""
-    audio_url = data.get('audio_url')
-    
-    if not audio_url:
-        return jsonify({
-            "version": "v2",
-            "content": {
-                "messages": [
-                    {
-                        "type": "text",
-                        "text": "❌ No audio received. Please send a voice message!"
-                    }
-                ]
-            }
-        }), 400
-    
-    try:
-        # Download audio file
-        response = requests.get(audio_url, timeout=30)
-        if response.status_code == 200:
-            # Generate unique filename
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"voice_{user.id}_{timestamp}.wav"
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # Save audio file
-            with open(filepath, 'wb') as f:
-                f.write(response.content)
-            
-            # Analyze audio (speech to text + food analysis)
-            analysis_result = FoodAnalysisService.analyze_food_voice(filepath)
-            
-            # Create food log
-            food_log = FoodLog(
-                user_id=user.id,
-                food_name=analysis_result['food_name'],
-                calories=analysis_result['calories'],
-                protein=analysis_result['protein'],
-                carbs=analysis_result['carbs'],
-                fat=analysis_result['fat'],
-                fiber=analysis_result['fiber'],
-                sodium=analysis_result['sodium'],
-                food_score=analysis_result['food_score'],
-                analysis_method='voice',
-                raw_input="Voice message",
-                confidence_score=analysis_result['confidence_score']
-            )
-            
-            db.session.add(food_log)
-            db.session.commit()
-            
-            # Update daily stats
-            daily_stats = DailyStatsService.update_daily_stats(user.id, food_log)
-            
-            # Format response message
-            response_text = format_analysis_response(analysis_result, daily_stats, user)
-            
-            # Clean up audio file
-            os.remove(filepath)
-            
-            # Return ManyChat dynamic block format
-            return jsonify({
-                "version": "v2",
-                "content": {
-                    "messages": [
-                        {
-                            "type": "text",
-                            "text": response_text
-                        }
-                    ]
-                }
+            return jsonify({'error': 'Invalid signature'}), StatusCodes.UNAUTHORIZED
+        
+        # Validate and sanitize input
+        request_data = request.get_json()
+        errors, sanitized_data = ValidationService.validate_mercadopago_webhook(request_data)
+        
+        if errors:
+            caloria_logger.warning("MercadoPago webhook validation failed", details={
+                "errors": errors
             })
-        else:
-            return jsonify({
-                "version": "v2",
-                "content": {
-                    "messages": [
-                        {
-                            "type": "text",
-                            "text": "❌ Could not download your audio. Please try again!"
-                        }
-                    ]
-                }
-            }), 400
-            
-    except Exception as e:
-        app.logger.error(f"Audio processing error: {str(e)}")
-        return jsonify({
-            "version": "v2",
-            "content": {
-                "messages": [
-                    {
-                        "type": "text",
-                        "text": "❌ Error processing your audio. Please try again!"
-                    }
-                ]
-            }
-        }), 500
-
-def handle_quiz_response(user, data):
-    """Handle quiz responses from user"""
-    quiz_data = data.get('quiz_data', {})
-    question_number = data.get('question_number', 0)
-    
-    # Update user profile with quiz responses
-    if 'weight' in quiz_data:
-        user.weight = float(quiz_data['weight'])
-    if 'height' in quiz_data:
-        user.height = float(quiz_data['height'])
-    if 'age' in quiz_data:
-        user.age = int(quiz_data['age'])
-    if 'gender' in quiz_data:
-        user.gender = quiz_data['gender']
-    if 'activity_level' in quiz_data:
-        user.activity_level = quiz_data['activity_level']
-    if 'goal' in quiz_data:
-        user.goal = quiz_data['goal']
-    if 'first_name' in quiz_data:
-        user.first_name = quiz_data['first_name']
-    if 'last_name' in quiz_data:
-        user.last_name = quiz_data['last_name']
-    
-    # PHASE 2A: Add subscription mentions at questions 10-11
-    subscription_teaser = ""
-    if question_number in [10, 11]:
-        subscription_teaser = f"""
-
-💎 ¡Por cierto, {user.first_name or 'amigo'}!
-Al finalizar este quiz tendrás acceso a nuestro plan PREMIUM:
-✨ Análisis ilimitado de comidas
-🎯 Recomendaciones personalizadas avanzadas  
-📊 Seguimiento detallado de micronutrientes
-⚡ ¡Prueba GRATIS por 24 horas completas!
-
-🎉 ¡Solo quedan {15 - question_number} preguntas más!"""
-
-    # Check if quiz is completed
-    quiz_completed = data.get('quiz_completed', False) or question_number >= 15
-    
-    if quiz_completed:
-        # Calculate BMR and daily calorie goal
-        user.update_calculated_values()
-        user.quiz_completed = True
+            return jsonify({'error': 'Invalid webhook data'}), StatusCodes.BAD_REQUEST
         
-        # PHASE 2A: Create subscription at quiz completion
-        app.logger.info(f"Quiz completed for user {user.id}, creating subscription...")
+        # Track webhook metrics
+        webhook_metrics.record_webhook_received('mercadopago')
         
-        # Log quiz completion activity to both trial activity and system activity log
-        SubscriptionService.log_trial_activity(user, 'quiz_completed', {
-            'question_count': 15,
-            'completion_time': datetime.utcnow().isoformat()
+        # Route to appropriate handler
+        response_data, status_code = webhook_router.route_webhook('mercadopago', sanitized_data)
+        
+        # Track successful processing
+        processing_time_ms = (time.time() - start_time) * 1000
+        webhook_metrics.record_webhook_processed('mercadopago', True, processing_time_ms)
+        
+        caloria_logger.info("MercadoPago webhook processed successfully", details={
+            "status_code": status_code,
+            "processing_time_ms": processing_time_ms,
+            "webhook_type": sanitized_data.get('type')
         })
         
-        # Log quiz completion to system activity log
-        SystemActivityLog.log_activity(
-            user_id=user.id,
-            activity_type='quiz_completed',
-            activity_data={
-                'goal': user.goal,
-                'bmr': user.bmr,
-                'daily_calorie_goal': user.daily_calorie_goal,
-                'completion_time': datetime.utcnow().isoformat()
-            }
-        )
+        return jsonify(response_data), status_code
         
-        # Create Mercado Pago subscription
-        subscription_link = MercadoPagoService.create_subscription_link(
-            user,
-            return_url=f"https://caloria.vip/subscription-success?user={user.id}",
-            cancel_url=f"https://caloria.vip/subscription-cancel?user={user.id}"
-        )
+    except CaloriaException as e:
+        processing_time_ms = (time.time() - start_time) * 1000
+        webhook_metrics.record_webhook_processed('mercadopago', False, processing_time_ms)
         
-        # Log subscription creation activity
-        if subscription_link:
-            SystemActivityLog.log_activity(
-                user_id=user.id,
-                activity_type='subscription_created',
-                activity_data={
-                    'subscription_link': subscription_link,
-                    'price_ars': app.config.get('SUBSCRIPTION_PRICE_ARS', 499900.0) / 100
-                }
-            )
-        
-        db.session.commit()
-        
-        if subscription_link:
-            # Generate welcome message with subscription offer
-            welcome_message = f"""
-🎉 ¡Felicitaciones {user.first_name}! Has completado tu perfil nutricional.
-
-📊 TU PLAN PERSONALIZADO:
-🎯 Objetivo: {user.goal.replace('_', ' ').title()}
-🔥 Calorías diarias: {user.daily_calorie_goal:.0f} kcal
-💪 Metabolismo basal: {user.bmr:.0f} kcal
-
-🌟 ¡AHORA DESBLOQUEA EL PODER COMPLETO!
-
-💎 CALORIA PREMIUM - 24 HORAS GRATIS:
-✅ Análisis ILIMITADO de comidas (vs 3 gratis)
-✅ Recomendaciones personalizadas avanzadas
-✅ Seguimiento de micronutrientes detallado
-✅ Planificación de comidas inteligente
-✅ Soporte prioritario 24/7
-
-💰 Después de tu prueba: Solo $4999.00 ARS/mes
-🚫 Cancela cuando quieras, sin compromisos
-
-🎁 ¡Activa tu prueba GRATUITA ahora!
-👇 Haz clic para comenzar:"""
-            
-            # Return response with payment link
-            return jsonify({
-                "version": "v2",
-                "content": {
-                    "type": "telegram",
-                    "messages": [
-                        {
-                            "type": "text",
-                            "text": welcome_message
-                        },
-                        {
-                            "type": "text", 
-                            "text": f"🔗 ENLACE DE ACTIVACIÓN:\n{subscription_link}\n\n⚡ ¡Válido por 30 minutos!"
-                        }
-                    ],
-                    "external_message_callback": {
-                        "url": "https://caloria.vip/webhook/manychat",
-                        "method": "post",
-                        "payload": {
-                            "subscriber_id": "{{user_id}}",
-                            "first_name": "{{first_name}}",
-                            "last_name": "{{last_name}}",
-                            "message_text": "{{last_input_text}}",
-                            "attachment_url": "{{last_input_attachment_url}}",
-                            "message_type": "{{last_input_type}}"
-                        },
-                        "timeout": 3600
-                    }
-                }
-            })
-        else:
-            # Fallback if subscription creation fails
-            app.logger.error(f"Failed to create subscription for user {user.id}")
-            
-            fallback_message = f"""
-🎉 Welcome to Caloria, {user.first_name}!
-
-📊 Your personalized profile:
-🎯 Daily Calorie Goal: {user.daily_calorie_goal:.0f} kcal
-💪 Goal: {user.goal.replace('_', ' ').title()}
-🔥 BMR: {user.bmr:.0f} kcal
-
-Ready to start tracking your meals! Send me photos, descriptions, or voice messages of your food! 📸🍽️
-
-⚠️ Subscription service temporarily unavailable. You can still track {3} meals today!"""
-            
-            return jsonify({
-                "version": "v2",
-                "content": {
-                    "type": "telegram",
-                    "messages": [
-                        {
-                            "type": "text",
-                            "text": fallback_message
-                        }
-                    ],
-                    "external_message_callback": {
-                        "url": "https://caloria.vip/webhook/manychat",
-                        "method": "post",
-                        "payload": {
-                            "subscriber_id": "{{user_id}}",
-                            "first_name": "{{first_name}}",
-                            "last_name": "{{last_name}}",
-                            "message_text": "{{last_input_text}}",
-                            "attachment_url": "{{last_input_attachment_url}}",
-                            "message_type": "{{last_input_type}}"
-                        },
-                        "timeout": 3600
-                    }
-                }
-            })
-    else:
-        # Quiz in progress - return current progress with subscription teaser
-        progress_message = f"""
-✅ Pregunta {question_number} completada!
-
-📋 Progreso: {question_number}/15 ({int(question_number/15*100)}%)
-{subscription_teaser}
-
-👉 ¡Continúa con la siguiente pregunta!"""
-        
-        return jsonify({
-            "version": "v2",
-            "content": {
-                "type": "telegram", 
-                "messages": [
-                    {
-                        "type": "text",
-                        "text": progress_message
-                    }
-                ]
-            }
+        caloria_logger.error(f"MercadoPago webhook error: {e.message}", error=e, details={
+            "error_code": e.error_code
         })
+        return jsonify({'status': 'error'}), StatusCodes.INTERNAL_SERVER_ERROR
+        
+    except Exception as e:
+        processing_time_ms = (time.time() - start_time) * 1000
+        webhook_metrics.record_webhook_processed('mercadopago', False, processing_time_ms)
+        
+        caloria_logger.error(f"Unexpected MercadoPago webhook error: {str(e)}", error=e)
+        return jsonify({'status': 'error'}), StatusCodes.INTERNAL_SERVER_ERROR
+
+
+# Legacy function removed - now handled by modular food_analysis_handlers.py
+
+# Legacy function removed - now handled by modular food_analysis_handlers.py
+
+# Legacy function removed - now handled by modular food_analysis_handlers.py
+
+# Legacy function removed - now handled by modular quiz_handlers.py
 
 def format_analysis_response(analysis_result, daily_stats, user=None):
     """Format the food analysis response message with premium features for trial users"""
@@ -3262,7 +1663,7 @@ class AnalyticsService:
             app.logger.error(f"Funnel analytics error: {str(e)}")
             return {}
 
-# Add analytics logging to quiz handler
+# Analytics service for quiz handling - now integrated into modular quiz handler
 def handle_quiz_response_with_analytics(user, data):
     """Enhanced quiz handler with analytics logging"""
     question_number = data.get('question_number', 0)
@@ -3277,8 +1678,8 @@ def handle_quiz_response_with_analytics(user, data):
     elif question_number >= 15:
         AnalyticsService.log_conversion_event(user, 'quiz_completed')
     
-    # Call original quiz handler
-    return handle_quiz_response(user, data)
+    # Use modular quiz handler
+    return quiz_handler.handle_quiz_response(user, data)
 
 if __name__ == '__main__':
     with app.app_context():
@@ -3345,6 +1746,31 @@ def general_health():
     return health_checker.get_overall_health()
 
 # ===== END: Health Check Endpoints =====
+
+# ===== NEW: Application Factory for Testing =====
+def create_app(config=None):
+    """Application factory for testing"""
+    test_app = Flask(__name__)
+    
+    # Copy configuration from main app
+    test_app.config.update(app.config)
+    
+    # Override with test config if provided
+    if config:
+        test_app.config.update(config)
+    
+    # Initialize extensions
+    db.init_app(test_app)
+    
+    # Copy routes from main app
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint != 'static':
+            view_func = app.view_functions[rule.endpoint]
+            test_app.add_url_rule(rule.rule, rule.endpoint, view_func, methods=rule.methods)
+    
+    return test_app
+
+# ===== END: Application Factory =====
 
 if __name__ == '__main__':
 

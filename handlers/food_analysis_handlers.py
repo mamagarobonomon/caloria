@@ -265,95 +265,76 @@ class FoodAnalysisHandler:
             return self._fallback_text_analysis(text)
     
     def _analyze_image_comprehensive(self, image_data: bytes, image_url: str) -> Dict[str, Any]:
-        """Analyze image using multiple methods for best results"""
+        """Analyze image using Gemini Vision as primary method with simplified fallbacks"""
         try:
-            # Try Google Cloud Vision first (most accurate)
-            try:
-                google_result = self._analyze_image_with_google_vision(image_data)
-                if google_result['confidence_score'] >= AppConstants.HIGH_CONFIDENCE_THRESHOLD:
-                    return google_result
-            except Exception as e:
-                self.logger.warning(f"Google Vision analysis failed: {str(e)}")
+            # Create temporary file for analysis
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                temp_file.write(image_data)
+                temp_path = temp_file.name
             
-            # Try Spoonacular as fallback
             try:
-                spoonacular_result = self._analyze_image_with_spoonacular(image_url)
-                if spoonacular_result['confidence_score'] >= AppConstants.MIN_CONFIDENCE_SCORE:
-                    return spoonacular_result
-            except Exception as e:
-                self.logger.warning(f"Spoonacular image analysis failed: {str(e)}")
-            
-            # Basic fallback analysis
-            return self._fallback_image_analysis(image_url)
+                # Primary: Vertex AI Gemini Vision (best accuracy and cost-effective)
+                try:
+                    from app import FoodAnalysisService, VERTEX_AI_AVAILABLE
+                    if VERTEX_AI_AVAILABLE:
+                        gemini_result = FoodAnalysisService._analyze_image_with_gemini_vision(temp_path, None)
+                        if gemini_result and gemini_result.get('confidence_score', 0) >= 0.7:
+                            self.logger.info("✅ Gemini Vision analysis successful")
+                            return gemini_result
+                        else:
+                            self.logger.warning("⚠️ Gemini Vision low confidence, using enhanced fallback")
+                except Exception as e:
+                    self.logger.warning(f"Gemini Vision analysis failed: {str(e)}")
+                
+                # Simplified fallback: Enhanced nutrition estimation
+                self.logger.info("🔄 Using enhanced nutrition estimation fallback")
+                fallback_result = self._fallback_image_analysis(image_url)
+                fallback_result['analysis_method'] = 'enhanced_fallback'
+                return fallback_result
+                
+            finally:
+                # Clean up temp file
+                import os
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
             
         except Exception as e:
-            self.logger.error(f"Comprehensive image analysis failed", e)
+            self.logger.error(f"Image analysis failed", e)
             raise FoodAnalysisException(
-                "All image analysis methods failed",
-                analysis_method='image_comprehensive'
+                "Food analysis failed",
+                analysis_method='image_analysis_error'
             )
     
     def _analyze_image_with_google_vision(self, image_data: bytes) -> Dict[str, Any]:
-        """Analyze image using Google Cloud Vision API"""
+        """DEPRECATED: Basic Google Vision API - now redirects to Gemini Vision"""
+        self.logger.warning("⚠️ Using deprecated Google Vision method - consider switching to Gemini Vision")
+        
         try:
-            from google.cloud import vision
+            # Create temporary file and redirect to Gemini
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                temp_file.write(image_data)
+                temp_path = temp_file.name
             
-            client = vision.ImageAnnotatorClient()
-            image = vision.Image(content=image_data)
-            
-            # Detect text in image
-            text_response = client.text_detection(image=image)
-            
-            # Detect objects
-            objects_response = client.object_localization(image=image)
-            
-            # Process results
-            detected_text = text_response.text_annotations[0].description if text_response.text_annotations else ""
-            detected_objects = [obj.name for obj in objects_response.localized_object_annotations]
-            
-            # Combine text and object detection for food analysis
-            food_description = self._extract_food_from_vision_results(detected_text, detected_objects)
-            
-            if food_description:
-                # Analyze the extracted description
-                analysis_result = self._analyze_text_with_spoonacular(food_description)
-                analysis_result['confidence_score'] = min(analysis_result.get('confidence_score', 0.5) + 0.2, 1.0)
-                analysis_result['detection_method'] = 'google_vision'
-                return analysis_result
-            else:
-                raise FoodAnalysisException("No food detected in image", analysis_method='google_vision')
-                
+            try:
+                from app import FoodAnalysisService
+                return FoodAnalysisService._analyze_image_with_gemini_vision(temp_path, None)
+            finally:
+                import os
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                    
         except Exception as e:
-            self.logger.log_api_error('google_cloud', 'vision', e)
-            raise e
+            self.logger.log_api_error('google_vision_deprecated', 'redirect_to_gemini', e)
+            raise FoodAnalysisException("Deprecated Google Vision method failed", analysis_method='deprecated_google_vision')
     
     def _analyze_image_with_spoonacular(self, image_url: str) -> Dict[str, Any]:
-        """Analyze image using Spoonacular Image Classification API"""
-        try:
-            api_key = os.getenv('SPOONACULAR_API_KEY')
-            if not api_key:
-                raise APIException("Spoonacular API key not configured", api_service='spoonacular')
-            
-            response = requests.post(
-                APIEndpoints.SPOONACULAR_CLASSIFY,
-                data={'imageUrl': image_url},
-                headers={'X-RapidAPI-Key': api_key},
-                timeout=AppConstants.SPOONACULAR_TIMEOUT
-            )
-            
-            if response.status_code != 200:
-                raise APIException(
-                    f"Spoonacular image API error: {response.status_code}",
-                    api_service='spoonacular',
-                    status_code=response.status_code
-                )
-            
-            response_data = response.json()
-            return self._process_spoonacular_image_response(response_data)
-            
-        except Exception as e:
-            self.logger.log_api_error('spoonacular', 'classifyImage', e)
-            raise e
+        """DEPRECATED: Spoonacular image analysis - Gemini Vision is more accurate and cost-effective"""
+        self.logger.warning("⚠️ Using deprecated Spoonacular image analysis - Gemini Vision recommended")
+        
+        # Use enhanced fallback instead of expensive Spoonacular image API
+        return self._fallback_image_analysis(image_url)
     
     def _transcribe_audio(self, audio_url: str) -> str:
         """Transcribe audio using Google Cloud Speech-to-Text"""

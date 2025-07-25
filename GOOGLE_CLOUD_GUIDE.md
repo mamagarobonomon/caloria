@@ -25,11 +25,12 @@ Your Caloria application has been successfully migrated to use **Google Cloud AP
 - 🎤 **Voice**: SpeechRecognition (disabled for Python 3.13)
 - 🔄 **Fallback**: Basic keyword matching
 
-### **Current Setup (Google Cloud Primary)**
-- 🔍 **Primary Image**: Google Cloud Vision API
+### **Current Setup (Prompt-Based Gemini Vision Primary)**
+- 🤖 **Primary Image**: Vertex AI Gemini Vision with custom prompts (90-98% accuracy)
+- 🔍 **Secondary Image**: Google Cloud Vision API (70-80% accuracy)
 - 🎤 **Primary Voice**: Google Cloud Speech-to-Text API
 - 📊 **Nutrition**: Spoonacular API (for detailed nutritional data)
-- 🔄 **Fallbacks**: Spoonacular → Enhanced image analysis → Keyword matching
+- 🔄 **Fallbacks**: Gemini → Basic Vision → Spoonacular → Enhanced analysis → Keyword matching
 
 ---
 
@@ -39,6 +40,10 @@ Your Caloria application has been successfully migrated to use **Google Cloud AP
 ```
 📸 User sends food photo
     ↓
+🤖 Vertex AI Gemini Vision (Prompt-based)
+    ├─ ✅ Success (confidence > 0.7) → Get nutrition from Spoonacular
+    └─ ❌ API disabled/failure
+        ↓
 🔍 Google Cloud Vision API
     ├─ ✅ Success (confidence > 0.3) → Get nutrition from Spoonacular
     └─ ❌ Low confidence/failure

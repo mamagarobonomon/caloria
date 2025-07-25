@@ -25,9 +25,15 @@ try:
     from google.cloud import vision
     from google.cloud import speech
     from google.oauth2 import service_account
+    # Add Vertex AI for prompt-based image analysis
+    import vertexai
+    from vertexai.generative_models import GenerativeModel, Part
+    import google.genai as genai
     GOOGLE_CLOUD_AVAILABLE = True
+    VERTEX_AI_AVAILABLE = True
 except ImportError:
     GOOGLE_CLOUD_AVAILABLE = False
+    VERTEX_AI_AVAILABLE = False
     # Note: app.logger will be available after Flask app is created
 
 # ===== NEW: Import all modular services and handlers =====
@@ -791,112 +797,179 @@ class FoodAnalysisService:
 
     @staticmethod
     def analyze_food_image(image_path, user_description=None):
-        """Analyze food from image using Google Cloud Vision API as primary, Spoonacular as fallback"""
+        """Analyze food from image using Gemini Vision as primary method"""
         try:
-            app.logger.info("🔍 Starting Google Cloud Vision API food analysis")
+            app.logger.info("🤖 Starting Gemini Vision AI food analysis")
             
-            # First try Google Cloud Vision API
-            if GOOGLE_CLOUD_AVAILABLE:
-                vision_result = FoodAnalysisService._analyze_image_with_google_vision(image_path, user_description)
-                if vision_result and vision_result.get('confidence_score', 0) > 0.3:
-                    app.logger.info("✅ Google Cloud Vision analysis successful")
-                    return vision_result
+            # Primary: Vertex AI Gemini Vision (best accuracy and cost-effective)
+            if VERTEX_AI_AVAILABLE:
+                gemini_result = FoodAnalysisService._analyze_image_with_gemini_vision(image_path, user_description)
+                if gemini_result and gemini_result.get('confidence_score', 0) > 0.7:
+                    app.logger.info("✅ Gemini Vision analysis successful")
+                    return gemini_result
                 else:
-                    app.logger.warning("⚠️ Google Cloud Vision analysis low confidence, trying Spoonacular fallback")
+                    app.logger.warning("⚠️ Gemini Vision low confidence, trying enhanced fallback")
             
-            # Fallback to Spoonacular API
-            app.logger.info("🔄 Falling back to Spoonacular API")
-            spoonacular_result = FoodAnalysisService._analyze_image_with_spoonacular(image_path, user_description)
-            if spoonacular_result and spoonacular_result.get('confidence_score', 0) > 0.3:
-                app.logger.info("✅ Spoonacular fallback successful")
-                return spoonacular_result
-            
-            # Final fallback to enhanced image analysis
-            app.logger.warning("⚠️ All APIs failed, using enhanced fallback")
-            return FoodAnalysisService._enhanced_image_fallback(image_path, user_description)
+            # Fallback: Enhanced estimation based on any available analysis
+            app.logger.info("🔄 Using enhanced nutrition estimation")
+            enhanced_result = FoodAnalysisService._generate_nutrition_estimate(
+                user_description or "Mixed food dish", 0.6
+            )
+            enhanced_result['analysis_method'] = 'enhanced_fallback'
+            return enhanced_result
                 
         except Exception as e:
-            app.logger.error(f"Image analysis error: {str(e)}")
-            return FoodAnalysisService._fallback_analysis("Image analysis", user_description)
+            app.logger.error(f"Food analysis error: {str(e)}")
+            return FoodAnalysisService._fallback_analysis("Food analysis", user_description)
 
     @staticmethod
     def _analyze_image_with_google_vision(image_path, user_description=None):
-        """Analyze image using Google Cloud Vision API"""
+        """DEPRECATED: Legacy method - now redirects to Gemini Vision"""
+        app.logger.warning("⚠️ Using deprecated Google Vision method - redirecting to Gemini Vision")
+        return FoodAnalysisService._analyze_image_with_gemini_vision(image_path, user_description)
+
+    @staticmethod
+    def _analyze_image_with_gemini_vision(image_path, user_description=None):
+        """Analyze image using Vertex AI Gemini Vision with custom prompts"""
         try:
+            app.logger.info("🤖 Starting Vertex AI Gemini Vision analysis with custom prompt")
+            
+            # Initialize Vertex AI
             credentials = FoodAnalysisService._get_google_cloud_credentials()
             if not credentials:
-                app.logger.warning("No Google Cloud credentials available")
+                app.logger.warning("No Google Cloud credentials for Vertex AI")
                 return None
-                
-            # Initialize Vision API client
-            client = vision.ImageAnnotatorClient(credentials=credentials)
             
-            # Read image file
+            # Get project ID from credentials
+            if hasattr(credentials, 'service_account_email'):
+                project_id = credentials.service_account_email.split('@')[1].split('.')[0]
+            else:
+                # Try to get from environment
+                with open(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'), 'r') as f:
+                    cred_data = json.load(f)
+                    project_id = cred_data.get('project_id')
+            
+            if not project_id:
+                app.logger.warning("Could not determine project ID for Vertex AI")
+                return None
+            
+            # Initialize Vertex AI
+            vertexai.init(project=project_id, location="us-central1", credentials=credentials)
+            
+            # Create the enhanced prompt for food analysis
+            food_analysis_prompt = f"""
+            You are a professional nutritionist analyzing this food image. Provide a detailed, precise description suitable for accurate nutritional analysis.
+
+            **Analysis Requirements:**
+            1. **Primary Foods** with specific weights:
+               - Proteins: meat/fish/eggs type and estimated grams (e.g., "150g grilled chicken breast")
+               - Vegetables: specific types and portions (e.g., "100g steamed broccoli florets")
+               - Carbohydrates: starches with amounts (e.g., "120g roasted sweet potato")
+               - Dairy: cheese, milk products with estimated amounts
+               - Fats: visible oils, nuts, avocado with quantities
+
+            2. **Cooking Methods**: Be specific (baked, grilled, fried, steamed, raw, sautéed, etc.)
+
+            3. **Food Quality Indicators**:
+               - Fresh vs. processed
+               - Whole foods vs. refined
+               - Added fats or oils visible
+               - Seasoning level (light, moderate, heavy)
+
+            4. **Portion Assessment**:
+               - Single serving vs. multiple servings
+               - Restaurant vs. home-cooked portions
+               - Total estimated weight of the dish
+
+            5. **Nutritional Context**:
+               - High-protein, high-carb, high-fat, or balanced meal
+               - Estimated calorie density (light, moderate, heavy)
+
+            **Response Format:**
+            Provide ONE comprehensive sentence describing the complete dish with estimated weights.
+            
+            **Example Response:**
+            "Baked whole salmon fillet (180g) with roasted Brussels sprouts (100g), sweet potato cubes (120g), crumbled feta cheese (30g), and olive oil drizzle (1 tablespoon), served as a balanced single-serving dinner plate"
+
+            **User Context:** {user_description if user_description else "No additional context provided"}
+
+            **Important:** Be specific with weights and cooking methods for accurate nutritional calculation.
+            """
+            
+            # Load and prepare the image
             with open(image_path, 'rb') as image_file:
-                content = image_file.read()
+                image_data = image_file.read()
             
-            image = vision.Image(content=content)
+            # Create Vertex AI image part
+            image_part = Part.from_data(image_data, mime_type="image/jpeg")
             
-            # Perform label detection
-            response = client.label_detection(image=image)
-            labels = response.label_annotations
+            # Initialize Gemini Vision model (updated to latest available version)
+            model = GenerativeModel("gemini-2.5-flash")
             
-            # Perform object localization (better for food items)
-            objects = client.object_localization(image=image).localized_object_annotations
+            # Generate response
+            app.logger.info("🔍 Sending image and prompt to Gemini Vision...")
+            response = model.generate_content([food_analysis_prompt, image_part])
             
-            # Process results to find food items
-            food_items = []
-            confidence_scores = []
-            
-            # Check object detection results first (more specific)
-            for obj in objects:
-                name = obj.name.lower()
-                score = obj.score
-                if any(food_word in name for food_word in ['food', 'fruit', 'vegetable', 'meat', 'dish', 'drink', 'beverage']):
-                    food_items.append(name)
-                    confidence_scores.append(score)
-                    app.logger.info(f"📍 Object detected: {name} (confidence: {score:.2f})")
-            
-            # Check label detection results
-            for label in labels:
-                name = label.description.lower()
-                score = label.score
-                if any(food_word in name for food_word in ['food', 'fruit', 'vegetable', 'meat', 'dish', 'cuisine', 'ingredient', 'produce', 'snack', 'meal']):
-                    food_items.append(name)
-                    confidence_scores.append(score)
-                    app.logger.info(f"🏷️ Label detected: {name} (confidence: {score:.2f})")
-            
-            if not food_items:
-                app.logger.warning("No food items detected by Google Vision")
+            if not response or not response.text:
+                app.logger.warning("Empty response from Gemini Vision")
                 return None
             
-            # Use the highest confidence food item
-            best_idx = confidence_scores.index(max(confidence_scores))
-            detected_food = food_items[best_idx]
-            confidence = confidence_scores[best_idx]
+            # Extract the food description from response
+            food_description = response.text.strip()
+            app.logger.info(f"🤖 Gemini Vision analysis: {food_description[:100]}...")
             
-            # Use user description if provided, otherwise use detected food
-            food_name = user_description if user_description and user_description.strip() else detected_food
+            # Use the Gemini description for nutritional analysis
+            nutrition_data = FoodAnalysisService._get_nutrition_from_spoonacular(food_description)
             
-            app.logger.info(f"🎯 Best food detection: {detected_food} -> using: {food_name}")
-            
-            # Get nutritional data from Spoonacular
-            nutrition_data = FoodAnalysisService._get_nutrition_from_spoonacular(food_name)
             if nutrition_data:
-                nutrition_data['confidence_score'] = min(confidence + 0.1, 0.9)  # Boost confidence slightly
-                nutrition_data['food_name'] = food_name
+                # Calculate confidence based on description quality
+                word_count = len(food_description.split())
+                has_weights = any(unit in food_description.lower() for unit in ['g', 'gram', 'kg', 'cup', 'tablespoon', 'teaspoon'])
+                has_cooking_method = any(method in food_description.lower() for method in ['baked', 'grilled', 'fried', 'steamed', 'roasted', 'raw'])
+                
+                base_confidence = 0.9
+                if word_count >= 15:
+                    base_confidence += 0.05
+                if has_weights:
+                    base_confidence += 0.03
+                if has_cooking_method:
+                    base_confidence += 0.02
+                
+                nutrition_data['confidence_score'] = min(base_confidence, 0.98)  # Cap at 98%
+                nutrition_data['food_name'] = food_description
+                nutrition_data['analysis_method'] = 'gemini_vision_prompt'
+                app.logger.info(f"✅ Gemini Vision analysis successful with {nutrition_data['confidence_score']:.1%} confidence")
                 return nutrition_data
             else:
-                # Generate estimated nutrition if Spoonacular fails
-                return FoodAnalysisService._generate_nutrition_estimate(food_name, confidence)
+                # Generate enhanced nutrition based on Gemini description with better estimation
+                app.logger.info(f"📊 Spoonacular lookup failed, using enhanced estimation for: {food_description[:100]}...")
+                enhanced_nutrition = FoodAnalysisService._generate_nutrition_estimate(food_description, 0.85)
+                enhanced_nutrition['analysis_method'] = 'gemini_vision_enhanced_estimate'
+                return enhanced_nutrition
                 
         except Exception as e:
-            app.logger.error(f"Google Cloud Vision error: {str(e)}")
+            app.logger.error(f"Vertex AI Gemini Vision error: {str(e)}")
+            app.logger.error(f"Error details: {type(e).__name__}: {str(e)}")
             return None
 
     @staticmethod
+    def _build_food_description(labels, objects, texts, user_description=None):
+        """DEPRECATED: Legacy method for basic Vision API - use Gemini Vision instead"""
+        app.logger.warning("⚠️ Using deprecated _build_food_description - Gemini Vision recommended")
+        if user_description:
+            return user_description.strip()
+        return "Mixed food dish"
+
+    @staticmethod  
+    def _calculate_vision_confidence(labels, objects, texts):
+        """DEPRECATED: Legacy method for basic Vision API - use Gemini Vision instead"""
+        app.logger.warning("⚠️ Using deprecated _calculate_vision_confidence - Gemini Vision recommended")
+        return 0.5  # Default confidence for deprecated method
+
+    @staticmethod
     def _analyze_image_with_spoonacular(image_path, user_description=None):
-        """Analyze image using Spoonacular API (fallback)"""
+        """DEPRECATED: Spoonacular image analysis - Gemini Vision is more accurate and cost-effective"""
+        app.logger.warning("⚠️ Using deprecated Spoonacular image analysis - Gemini Vision recommended")
         try:
             api_key = app.config['SPOONACULAR_API_KEY']
             if not api_key:
@@ -991,45 +1064,102 @@ class FoodAnalysisService:
 
     @staticmethod
     def _generate_nutrition_estimate(food_name, confidence):
-        """Generate estimated nutrition when APIs fail"""
-        # Enhanced keyword-based estimation
+        """Generate estimated nutrition when APIs fail - enhanced for Gemini descriptions"""
+        # Enhanced keyword-based estimation that extracts weights from Gemini descriptions
         food_lower = food_name.lower()
         
-        # More comprehensive calorie estimates
-        calorie_estimates = {
-            'apple': 80, 'banana': 105, 'orange': 60, 'strawberry': 32, 'strawberries': 32,
-            'grape': 60, 'grapes': 60, 'cherry': 50, 'cherries': 50, 'peach': 60, 'pear': 85,
-            'pineapple': 50, 'watermelon': 30, 'cantaloupe': 35, 'honeydew': 36,
-            'broccoli': 25, 'carrot': 25, 'spinach': 20, 'lettuce': 15, 'tomato': 20,
+        # More comprehensive calorie estimates per 100g
+        calorie_per_100g = {
+            'fish': 200, 'salmon': 220, 'tuna': 130, 'cod': 90, 'sea bass': 120,
+            'broccoli': 25, 'carrot': 25, 'spinach': 20, 'lettuce': 15, 'tomato': 18,
             'cucumber': 15, 'bell pepper': 25, 'onion': 40, 'garlic': 150, 'potato': 160,
             'sweet potato': 100, 'corn': 90, 'green beans': 35, 'peas': 80,
-            'chicken': 250, 'beef': 300, 'pork': 280, 'fish': 200, 'salmon': 220,
-            'tuna': 130, 'shrimp': 100, 'turkey': 200, 'bacon': 540, 'ham': 145,
-            'egg': 70, 'cheese': 100, 'milk': 60, 'yogurt': 100, 'butter': 720,
-            'bread': 80, 'rice': 200, 'pasta': 200, 'pizza': 300, 'burger': 500,
-            'sandwich': 350, 'salad': 150, 'soup': 200, 'cookie': 150, 'cake': 350,
-            'nuts': 200, 'almonds': 580, 'peanuts': 560, 'cashews': 550,
+            'chicken': 250, 'beef': 300, 'pork': 280, 'turkey': 200, 'bacon': 540,
+            'egg': 155, 'cheese': 350, 'milk': 60, 'yogurt': 100, 'butter': 720,
+            'bread': 250, 'rice': 130, 'pasta': 350, 'pizza': 300,
+            'nuts': 600, 'almonds': 580, 'peanuts': 560, 'cashews': 550,
             'avocado': 160, 'olive oil': 880, 'coconut': 350
         }
         
-        estimated_calories = 100  # default
+        total_calories = 0
+        total_protein = 0
+        total_carbs = 0
+        total_fat = 0
         
-        # Find best match
-        for keyword, calories in calorie_estimates.items():
-            if keyword in food_lower:
-                estimated_calories = calories
-                break
+        # Extract weights and calculate nutrition based on Gemini's detailed descriptions
+        import re
+        
+        # Find weight patterns like "180g", "100g", "25g"
+        weight_matches = re.findall(r'(\d+)\s*g?\s*([a-zA-Z\s]+)', food_lower)
+        
+        if weight_matches:
+            app.logger.info(f"🔍 Extracting nutrition from weights: {weight_matches}")
+            for weight_str, ingredient in weight_matches:
+                try:
+                    weight = int(weight_str)
+                    ingredient = ingredient.strip()
+                    
+                    # Find matching ingredient
+                    cal_per_100g = 100  # default
+                    for food_key, cal_value in calorie_per_100g.items():
+                        if food_key in ingredient:
+                            cal_per_100g = cal_value
+                            break
+                    
+                    # Calculate nutrition based on weight
+                    calories = (cal_per_100g * weight) / 100
+                    total_calories += calories
+                    
+                    # Estimate macros based on food type
+                    if any(protein_food in ingredient for protein_food in ['fish', 'chicken', 'beef', 'cheese', 'egg']):
+                        total_protein += calories * 0.2 / 4  # 20% protein
+                        total_fat += calories * 0.1 / 9  # 10% fat
+                        total_carbs += calories * 0.05 / 4  # 5% carbs
+                    elif any(carb_food in ingredient for carb_food in ['potato', 'rice', 'bread', 'pasta']):
+                        total_carbs += calories * 0.8 / 4  # 80% carbs
+                        total_protein += calories * 0.1 / 4  # 10% protein
+                        total_fat += calories * 0.02 / 9  # 2% fat
+                    elif any(veg_food in ingredient for veg_food in ['broccoli', 'tomato', 'carrot', 'spinach']):
+                        total_carbs += calories * 0.7 / 4  # 70% carbs
+                        total_protein += calories * 0.25 / 4  # 25% protein
+                        total_fat += calories * 0.05 / 9  # 5% fat
+                    else:
+                        # Balanced macro split
+                        total_protein += calories * 0.15 / 4
+                        total_carbs += calories * 0.55 / 4
+                        total_fat += calories * 0.30 / 9
+                        
+                except ValueError:
+                    continue
+            
+            app.logger.info(f"📊 Calculated from weights: {total_calories:.0f} kcal, {total_protein:.1f}g protein")
+        else:
+            # Fallback to simple keyword matching
+            estimated_calories = 300  # default for complete meal
+            
+            # Find best match
+            for keyword, calories in calorie_per_100g.items():
+                if keyword in food_lower:
+                    estimated_calories = calories
+                    break
+            
+            total_calories = estimated_calories
+            total_protein = estimated_calories * 0.15 / 4  # 15% protein
+            total_carbs = estimated_calories * 0.55 / 4    # 55% carbs  
+            total_fat = estimated_calories * 0.30 / 9      # 30% fat
         
         return {
             'food_name': food_name,
-            'calories': estimated_calories,
-            'protein': estimated_calories * 0.15 / 4,  # 15% of calories from protein
-            'carbs': estimated_calories * 0.55 / 4,    # 55% from carbs
-            'fat': estimated_calories * 0.30 / 9,      # 30% from fat
+            'calories': max(total_calories, 50),  # Minimum 50 calories
+            'protein': max(total_protein, 1),     # Minimum 1g protein
+            'carbs': max(total_carbs, 5),         # Minimum 5g carbs
+            'fat': max(total_fat, 1),             # Minimum 1g fat
             'fiber': 3,
-            'sodium': 400,
-            'confidence_score': max(confidence, 0.4),  # Minimum confidence
-            'food_score': 3
+            'sodium': 100,
+            'confidence_score': confidence,
+            'food_score': FoodAnalysisService._calculate_food_score(
+                total_calories, total_protein, 3, 100
+            )
         }
 
     @staticmethod

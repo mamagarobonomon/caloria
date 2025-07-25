@@ -309,7 +309,7 @@ class ErrorHandler:
             'message': f'Método {request.method} no permitido para {request.path}',
             'allowed_methods': e.description,
             'request_id': getattr(g, 'request_id', None)
-        }), StatusCodes.METHOD_NOT_ALLOWED
+        }), 405
     
     def handle_rate_limit(self, e: HTTPException) -> Tuple[Dict[str, Any], int]:
         """Handle 429 Rate Limit errors"""

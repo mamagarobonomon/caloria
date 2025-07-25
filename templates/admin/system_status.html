@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+
+{% block title %}System Status - Caloria Admin{% endblock %}
+{% block page_title %}System Status{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    .status-healthy { background-color: #28a745; }
+    .status-degraded { background-color: #ffc107; }
+    .status-unhealthy { background-color: #dc3545; }
+    .status-unknown { background-color: #6c757d; }
+    
+    .metric-card {
+        border-left: 4px solid #007bff;
+        transition: all 0.3s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 25px rgba(0,0,0,0.1);
+    }
+    
+    .refresh-button {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .progress-ring {
+        width: 60px;
+        height: 60px;
+    }
+    .progress-ring-circle {
+        stroke: #e9ecef;
+        stroke-width: 4;
+        fill: transparent;
+    }
+    .progress-ring-value {
+        stroke: #28a745;
+        stroke-width: 4;
+        fill: transparent;
+        stroke-dasharray: 188.5;
+        stroke-dashoffset: 188.5;
+        transform-origin: 50% 50%;
+        transform: rotate(-90deg);
+        transition: stroke-dashoffset 0.5s ease-in-out;
+    }
+    
+    .auto-refresh-indicator {
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header with Overall Status -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="mb-0">
+                            <span class="status-indicator status-{{ health_data.status }}"></span>
+                            System Status: 
+                            <span class="badge bg-{{ status_colors[health_data.status] }} fs-6 ms-2">
+                                {{ health_data.status|title }}
+                            </span>
+                        </h4>
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-clock me-1"></i>
+                            Last updated: {{ health_data.timestamp }}
+                            <span class="ms-3">
+                                <i class="fas fa-stopwatch me-1"></i>
+                                Uptime: {{ uptime_display }}
+                            </span>
+                            <span class="ms-3">
+                                <i class="fas fa-code-branch me-1"></i>
+                                Version: {{ version_info }}
+                            </span>
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="progress-ring">
+                            <svg class="progress-ring">
+                                <circle class="progress-ring-circle" cx="30" cy="30" r="30"></circle>
+                                <circle class="progress-ring-value" cx="30" cy="30" r="30"></circle>
+                            </svg>
+                            <div class="position-absolute d-flex align-items-center justify-content-center" style="top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                <small class="fw-bold">Response Time</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Core System Health Cards -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title text-muted mb-1">Database</h6>
+                        <h4 class="mb-0">
+                            <span class="status-indicator status-{{ database_health.status }}"></span>
+                            {{ database_health.status|title }}
+                        </h4>
+                        <small class="text-muted">{{ database_health.details.total_records }} records</small>
+                    </div>
+                    <div class="text-primary">
+                        <i class="fas fa-database fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title text-muted mb-1">Cache</h6>
+                        <h4 class="mb-0">
+                            <span class="status-indicator status-{{ cache_health.status }}"></span>
+                            {{ cache_health.metrics.hit_rate_percent }}%
+                        </h4>
+                        <small class="text-muted">{{ cache_health.metrics.total_entries }} entries</small>
+                    </div>
+                    <div class="text-info">
+                        <i class="fas fa-memory fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title text-muted mb-1">External APIs</h6>
+                        <h4 class="mb-0">
+                            <span class="status-indicator status-{{ api_health.status }}"></span>
+                            {{ api_health.status|title }}
+                        </h4>
+                        <small class="text-muted">{{ api_health.message }}</small>
+                    </div>
+                    <div class="text-warning">
+                        <i class="fas fa-plug fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title text-muted mb-1">Metrics</h6>
+                        <h4 class="mb-0">
+                            <span class="status-indicator status-{{ metrics_data.status }}"></span>
+                            {{ metrics_data.status|title }}
+                        </h4>
+                        <small class="text-muted">{{ metrics_data.message }}</small>
+                    </div>
+                    <div class="text-success">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Metrics Section -->
+<div class="row mb-4">
+    <!-- Database Details -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-database me-2"></i>
+                    Database Performance
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h3 class="text-primary">{{ database_health.details.total_records }}</h3>
+                            <p class="text-muted mb-0">Total Records</p>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h3 class="text-info">{{ database_health.details.recent_activity.food_logs_24h }}</h3>
+                            <p class="text-muted mb-0">Food Logs (24h)</p>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    {% for table, count in database_health.details.table_sizes.items() %}
+                    <div class="col-4 text-center">
+                        <strong>{{ count }}</strong>
+                        <br><small class="text-muted">{{ table|title }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <span class="badge bg-{{ status_colors[database_health.status] }}">
+                        {{ database_health.message }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- API Status Details -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-plug me-2"></i>
+                    External API Status
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for api_name, api_info in api_health.apis.items() %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <strong>{{ api_name|title }}</strong>
+                        <br>
+                        <small class="text-muted">{{ api_info.message }}</small>
+                        {% if api_info.response_time_ms %}
+                        <br><small class="text-info">{{ "%.1f"|format(api_info.response_time_ms) }}ms</small>
+                        {% endif %}
+                    </div>
+                    <span class="badge bg-{{ status_colors[api_info.status] }}">
+                        {{ api_info.status|title }}
+                    </span>
+                </div>
+                {% if not loop.last %}<hr>{% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Metrics -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-tachometer-alt me-2"></i>
+                    Performance Metrics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if metrics_data.metrics %}
+                    <div class="col-lg-4 mb-3">
+                        <h6 class="text-muted">Error Rates (per minute)</h6>
+                        <ul class="list-unstyled">
+                            {% for error_type, rate in metrics_data.metrics.error_rates.items() %}
+                            <li>
+                                <strong>{{ error_type|replace('_', ' ')|title }}:</strong> 
+                                <span class="text-{{ 'danger' if rate > 0 else 'success' }}">{{ rate }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div class="col-lg-4 mb-3">
+                        <h6 class="text-muted">Response Times (95th percentile)</h6>
+                        <ul class="list-unstyled">
+                            {% for response_type, time_ms in metrics_data.metrics.response_times.items() %}
+                            <li>
+                                <strong>{{ response_type|replace('_', ' ')|title }}:</strong> 
+                                <span class="text-{{ 'warning' if time_ms > 1000 else 'success' }}">{{ time_ms }}ms</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div class="col-lg-4 mb-3">
+                        <h6 class="text-muted">Throughput (per minute)</h6>
+                        <ul class="list-unstyled">
+                            {% for throughput_type, rate in metrics_data.metrics.throughput.items() %}
+                            <li>
+                                <strong>{{ throughput_type|replace('_', ' ')|title }}:</strong> 
+                                <span class="text-info">{{ rate }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% else %}
+                    <div class="col-12 text-center text-muted">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No detailed metrics available
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cache Performance Details -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-memory me-2"></i>
+                    Cache Performance
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-lg-2 col-md-4 col-6 mb-3">
+                        <h4 class="text-primary">{{ cache_health.metrics.hit_rate_percent }}%</h4>
+                        <small class="text-muted">Hit Rate</small>
+                    </div>
+                    <div class="col-lg-2 col-md-4 col-6 mb-3">
+                        <h4 class="text-info">{{ cache_health.metrics.total_entries }}</h4>
+                        <small class="text-muted">Total Entries</small>
+                    </div>
+                    <div class="col-lg-2 col-md-4 col-6 mb-3">
+                        <h4 class="text-success">{{ cache_health.metrics.valid_entries }}</h4>
+                        <small class="text-muted">Valid Entries</small>
+                    </div>
+                    <div class="col-lg-2 col-md-4 col-6 mb-3">
+                        <h4 class="text-warning">{{ cache_health.metrics.expired_entries }}</h4>
+                        <small class="text-muted">Expired</small>
+                    </div>
+                    <div class="col-lg-2 col-md-4 col-6 mb-3">
+                        <h4 class="text-secondary">{{ cache_health.metrics.hit_count }}</h4>
+                        <small class="text-muted">Hits</small>
+                    </div>
+                    <div class="col-lg-2 col-md-4 col-6 mb-3">
+                        <h4 class="text-danger">{{ cache_health.metrics.miss_count }}</h4>
+                        <small class="text-muted">Misses</small>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <span class="badge bg-{{ status_colors[cache_health.status] }}">
+                        {{ cache_health.message }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Auto-refresh button -->
+<button class="btn btn-primary refresh-button" onclick="refreshStatus()" title="Refresh Status">
+    <i class="fas fa-sync-alt" id="refresh-icon"></i>
+</button>
+
+<!-- Auto-refresh indicator -->
+<div class="auto-refresh-indicator position-fixed" style="top: 20px; right: 20px; z-index: 1000;">
+    <small class="badge bg-secondary">
+        <i class="fas fa-circle-notch fa-spin"></i>
+        Auto-refresh: <span id="countdown">30</span>s
+    </small>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let refreshInterval;
+let countdownInterval;
+let countdown = 30;
+
+function refreshStatus() {
+    // Show spinning icon
+    document.getElementById('refresh-icon').classList.add('fa-spin');
+    
+    // Reload the page
+    setTimeout(() => {
+        location.reload();
+    }, 500);
+}
+
+function startAutoRefresh() {
+    // Start countdown
+    countdownInterval = setInterval(() => {
+        countdown--;
+        document.getElementById('countdown').textContent = countdown;
+        
+        if (countdown <= 0) {
+            refreshStatus();
+        }
+    }, 1000);
+}
+
+// Start auto-refresh when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    startAutoRefresh();
+    
+    // Add hover effects to metric cards
+    document.querySelectorAll('.metric-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.borderLeftColor = '#007bff';
+        });
+        card.addEventListener('mouseleave', function() {
+            this.style.borderLeftColor = '#007bff';
+        });
+    });
+});
+</script>
+{% endblock %} 

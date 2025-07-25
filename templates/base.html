@@ -101,6 +101,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'admin_system_status' %}active{% endif %}" 
+                               href="{{ url_for('admin_system_status') }}">
+                                <i class="fas fa-heartbeat me-2"></i>
+                                System Status
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="#" onclick="showAPIInfo()">
                                 <i class="fas fa-code me-2"></i>
                                 API Docs

@@ -1042,6 +1042,54 @@ def admin_dashboard():
                          recent_food_logs=recent_food_logs,
                          recent_activities=recent_activities)
 
+@app.route('/admin/system-status')
+def admin_system_status():
+    """Admin page for system status monitoring"""
+    if 'admin_id' not in session:
+        return redirect(url_for('admin_login'))
+    
+    try:
+        # Get comprehensive system health data
+        health_data = health_checker.get_overall_health()
+        
+        # Get specific health checks
+        database_health = health_checker._check_database_health()
+        cache_health = health_checker._check_cache_performance()
+        api_health = health_checker._check_external_apis_health()
+        metrics_data = health_checker._check_application_metrics()
+        
+        # Get version and uptime info
+        version_info = health_checker._get_application_version()
+        uptime_seconds = health_checker._get_uptime_seconds()
+        
+        # Format uptime for display
+        uptime_hours = uptime_seconds // 3600
+        uptime_minutes = (uptime_seconds % 3600) // 60
+        uptime_display = f"{int(uptime_hours)}h {int(uptime_minutes)}m"
+        
+        # Determine status colors for UI
+        status_colors = {
+            'healthy': 'success',
+            'degraded': 'warning', 
+            'unhealthy': 'danger',
+            'unknown': 'secondary'
+        }
+        
+        return render_template('admin/system_status.html',
+                             health_data=health_data,
+                             database_health=database_health,
+                             cache_health=cache_health,
+                             api_health=api_health,
+                             metrics_data=metrics_data,
+                             version_info=version_info,
+                             uptime_display=uptime_display,
+                             status_colors=status_colors)
+        
+    except Exception as e:
+        app.logger.error(f"Error loading system status: {str(e)}")
+        flash('Error loading system status', 'error')
+        return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/users')
 def admin_users():
     if 'admin_id' not in session:

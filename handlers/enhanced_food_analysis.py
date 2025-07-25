@@ -1,6 +1,7 @@
 """
 Enhanced Food Analysis Handler for Comprehensive Food Logging
 Implements detailed Gemini Vision AI analysis with clarification questions and multi-part responses
+BILINGUAL SUPPORT: Spanish (default) and English
 """
 
 import os
@@ -28,13 +29,111 @@ from config.constants import AppConstants
 
 
 class EnhancedFoodAnalysisHandler:
-    """Enhanced food analysis with detailed Gemini Vision AI and interactive clarification"""
+    """Enhanced food analysis with detailed Gemini Vision AI and interactive clarification - BILINGUAL"""
     
     def __init__(self, db, user_model, food_log_model):
         self.db = db
         self.User = user_model
         self.FoodLog = food_log_model
         self.logger = caloria_logger
+        
+        # Language support
+        self.messages = {
+            'es': {
+                'analyzing': 'Analizando, dame un segundo...',
+                'analysis_header': '📊 Aquí está tu análisis nutricional detallado:',
+                'meal_description': '*Descripción del plato*:',
+                'food_parameters': '*Parámetros alimentarios*:',
+                'nutrients': '*Nutrientes*:',
+                'food_scores': '*Puntuación alimentaria*:',
+                'additions_header': '*Qué agregar para reducir picos de azúcar*:',
+                'replacements_header': '*Reemplazos y exclusiones*:',
+                'clarification_intro': 'Podrías aclarar algunos detalles sobre tu comida? (Puedes omitir cualquier pregunta y simplemente presionar "Analizar" cuando estés listo.)',
+                'ready_question': '¿Listo para analizar tu comida?',
+                'new_log_prompt': '📸 ¡Listo para un nuevo registro! Envíame una foto de tu comida o describe lo que comiste.',
+                'error_analysis': '❌ Lo siento, no pude analizar tu comida. Por favor intenta de nuevo.',
+                'error_image': '❌ No pude procesar la imagen. Por favor envía una foto más clara.',
+                'error_session': '❌ Sesión expirada. Por favor envía tu foto de nuevo.',
+                'buttons': {
+                    'analyze': 'Analizar',
+                    'new_log': 'Nuevo Registro'
+                },
+                'cheese_question': '¿De qué tipo de queso están hechos los cubos?',
+                'cooking_question': '¿Cómo fue preparado el {food} (ej: aceites, condimentos o salsas agregadas)?',
+                'preparation_question': '¿Cómo fue cocinado el {food}?',
+                'glycemic_load': {
+                    'low': '📉 Baja',
+                    'moderate': '📊 Moderada', 
+                    'high': '📈 Alta'
+                },
+                'portion_size': {
+                    'small': '🍽️ Pequeña',
+                    'medium': '🍽️ Mediana',
+                    'large': '🍽️ Grande',
+                    'extra_large': '🍽️ Extra Grande'
+                },
+                'frequency': {
+                    'often': 'A menudo ✔️',
+                    'regularly': 'Regularmente ✔️',
+                    'sometimes': 'A veces ⚠️',
+                    'occasionally': 'Ocasionalmente ⚠️'
+                },
+                'food_rating': {
+                    'excellent': 'Excelente Elección',
+                    'great': 'Gran Elección', 
+                    'good': 'Buena Elección',
+                    'fair': 'Elección Regular',
+                    'poor': 'Elección Mejorable'
+                }
+            },
+            'en': {
+                'analyzing': 'Analyzing, give me a sec...',
+                'analysis_header': '📊 Here\'s your detailed nutritional analysis:',
+                'meal_description': '*Meal Description*:',
+                'food_parameters': '*Food Parameters*:',
+                'nutrients': '*Nutrients*:',
+                'food_scores': '*Food Scores*:',
+                'additions_header': '*What to Add to Decrease Sugar Spikes*:',
+                'replacements_header': '*Replacements and Exclusions*:',
+                'clarification_intro': 'Could you clarify a few details about your meal? (You can skip any question and simply press "Analyze" when you\'re ready.)',
+                'ready_question': 'Ready to analyze your meal?',
+                'new_log_prompt': '📸 Ready for a new food log! Send me a photo of your meal, or describe what you ate.',
+                'error_analysis': '❌ Sorry, I couldn\'t analyze your food. Please try again.',
+                'error_image': '❌ Unable to process image. Please send a clearer photo.',
+                'error_session': '❌ Session expired. Please send your photo again.',
+                'buttons': {
+                    'analyze': 'Analyze',
+                    'new_log': 'New Log'
+                },
+                'cheese_question': 'What type of cheese are the cubes made from?',
+                'cooking_question': 'How was the {food} prepared (e.g., any added oils, seasonings, or sauces)?',
+                'preparation_question': 'How was the {food} cooked?',
+                'glycemic_load': {
+                    'low': '📉 Low',
+                    'moderate': '📊 Moderate',
+                    'high': '📈 High'
+                },
+                'portion_size': {
+                    'small': '🍽️ Small',
+                    'medium': '🍽️ Medium',
+                    'large': '🍽️ Large',
+                    'extra_large': '🍽️ Extra Large'
+                },
+                'frequency': {
+                    'often': 'Often ✔️',
+                    'regularly': 'Regularly ✔️', 
+                    'sometimes': 'Sometimes ⚠️',
+                    'occasionally': 'Occasionally ⚠️'
+                },
+                'food_rating': {
+                    'excellent': 'Excellent Choice',
+                    'great': 'Great Choice',
+                    'good': 'Good Choice', 
+                    'fair': 'Fair Choice',
+                    'poor': 'Poor Choice'
+                }
+            }
+        }
         
         # Initialize Gemini Vision AI
         if VERTEX_AI_AVAILABLE:
@@ -55,23 +154,26 @@ class EnhancedFoodAnalysisHandler:
     
     def analyze_food_photo_with_clarification(self, subscriber_id: str, image_url: str) -> Dict[str, Any]:
         """
-        Step 1: Analyze food photo and generate clarification questions
+        Step 1: Analyze food photo and generate clarification questions (BILINGUAL)
         Returns detailed description with clarification questions and buttons
         """
         start_time = time.time()
         
         try:
             user = self._get_or_create_user(subscriber_id)
+            user_lang = user.language or 'es'  # Default to Spanish
+            msgs = self.messages[user_lang]
+            
             FoodAnalysisMetrics.record_analysis_started('enhanced_image', str(user.id))
             
             # Download and validate image
             image_data = self._download_and_validate_image(image_url)
             
-            # Analyze with Gemini Vision AI
-            analysis_result = self._analyze_with_gemini_vision(image_data)
+            # Analyze with Gemini Vision AI (language-aware)
+            analysis_result = self._analyze_with_gemini_vision(image_data, user_lang)
             
-            # Generate clarification questions
-            clarification_questions = self._generate_clarification_questions(analysis_result)
+            # Generate clarification questions (language-specific)
+            clarification_questions = self._generate_clarification_questions(analysis_result, user_lang)
             
             # Store preliminary analysis in session/cache for later use
             session_key = f"food_analysis_{subscriber_id}_{int(time.time())}"
@@ -80,24 +182,26 @@ class EnhancedFoodAnalysisHandler:
                 'image_url': image_url,
                 'clarification_questions': clarification_questions,
                 'timestamp': datetime.utcnow().isoformat(),
-                'user_id': user.id
+                'user_id': user.id,
+                'language': user_lang
             }
             
             FoodAnalysisCache.set(session_key, preliminary_data, ttl=3600)  # 1 hour TTL
             
-            # Format response with clarification
-            response = self._format_clarification_response(analysis_result, clarification_questions, session_key)
+            # Format response with clarification (bilingual)
+            response = self._format_clarification_response(analysis_result, clarification_questions, session_key, user_lang)
             
             processing_time = (time.time() - start_time) * 1000
-            self.logger.info(f"Enhanced photo analysis completed in {processing_time:.2f}ms")
+            self.logger.info(f"Enhanced photo analysis completed in {processing_time:.2f}ms for language: {user_lang}")
             
             return response
             
         except Exception as e:
+            user_lang = getattr(self._get_or_create_user(subscriber_id), 'language', 'es')
             self.logger.error(f"Enhanced photo analysis failed for {subscriber_id}", e)
             return {
                 'error': 'enhanced_analysis_failed',
-                'message': '❌ Sorry, I couldn\'t analyze your photo. Please try again with a clearer image.'
+                'message': self.messages[user_lang]['error_analysis']
             }
     
     def process_user_clarification(self, subscriber_id: str, session_key: str, user_input: str = None) -> Dict[str, Any]:
@@ -145,49 +249,69 @@ class EnhancedFoodAnalysisHandler:
                 'message': '❌ Sorry, something went wrong. Please try again.'
             }
     
-    def _analyze_with_gemini_vision(self, image_data: bytes) -> Dict[str, Any]:
-        """Enhanced Gemini Vision AI analysis with detailed food identification"""
+    def _analyze_with_gemini_vision(self, image_data: bytes, language: str = 'es') -> Dict[str, Any]:
+        """Enhanced Gemini Vision AI analysis with language support"""
         
         if not self.gemini_available:
-            return self._fallback_detailed_analysis(image_data)
+            return self._fallback_detailed_analysis(image_data, language)
         
         try:
             with LogTimer("gemini_vision_enhanced_analysis"):
                 # Create image part for Gemini
                 image_part = Part.from_data(image_data, mime_type="image/jpeg")
                 
-                # Enhanced prompt for detailed food analysis
-                prompt = """
-                You are a professional nutritionist analyzing a food photo. Provide a detailed, accurate description following this exact format:
+                # Language-specific prompts for Gemini
+                prompts = {
+                    'es': """
+                    Eres un nutricionista profesional analizando una foto de comida. Proporciona una descripción detallada y precisa siguiendo este formato exacto:
 
-                FOOD_DESCRIPTION: [Detailed description with cooking method, estimated weights in grams, and specific food items]
+                    FOOD_DESCRIPTION: [Descripción detallada con método de cocción, pesos estimados en gramos, y alimentos específicos]
 
-                FOOD_ITEMS: [JSON array of individual food items with estimated weights]
-                Example: [{"item": "baked whole fish", "weight_grams": 500, "cooking_method": "baked"}, {"item": "broccoli", "weight_grams": 100, "preparation": "steamed"}]
+                    FOOD_ITEMS: [Array JSON de alimentos individuales con pesos estimados]
+                    Ejemplo: [{"item": "pescado entero al horno", "weight_grams": 500, "cooking_method": "horneado"}, {"item": "brócoli", "weight_grams": 100, "preparation": "al vapor"}]
 
-                CONFIDENCE: [Number from 0.0 to 1.0 indicating confidence in the analysis]
+                    CONFIDENCE: [Número de 0.0 a 1.0 indicando confianza en el análisis]
 
-                CLARIFICATION_NEEDED: [JSON array of specific questions about preparation methods, ingredients, or cooking details that would improve nutritional accuracy]
+                    CLARIFICATION_NEEDED: [Array JSON de preguntas específicas sobre métodos de preparación, ingredientes, o detalles de cocción que mejorarían la precisión nutricional]
 
-                COOKING_CONTEXT: [Any visible cooking methods, seasonings, oils, or preparation details you can observe]
+                    COOKING_CONTEXT: [Cualquier método de cocción visible, condimentos, aceites, o detalles de preparación que puedas observar]
 
-                Please be specific about weights (estimate carefully based on visual portion sizes), cooking methods (baked, fried, grilled, etc.), and identify all visible food components. Focus on accuracy for nutritional calculation.
-                """
+                    Por favor sé específico sobre pesos (estima cuidadosamente basado en tamaños visuales de porciones), métodos de cocción (horneado, frito, a la parrilla, etc.), e identifica todos los componentes alimentarios visibles. Enfócate en la precisión para el cálculo nutricional.
+                    """,
+                    'en': """
+                    You are a professional nutritionist analyzing a food photo. Provide a detailed, accurate description following this exact format:
+
+                    FOOD_DESCRIPTION: [Detailed description with cooking method, estimated weights in grams, and specific food items]
+
+                    FOOD_ITEMS: [JSON array of individual food items with estimated weights]
+                    Example: [{"item": "baked whole fish", "weight_grams": 500, "cooking_method": "baked"}, {"item": "broccoli", "weight_grams": 100, "preparation": "steamed"}]
+
+                    CONFIDENCE: [Number from 0.0 to 1.0 indicating confidence in the analysis]
+
+                    CLARIFICATION_NEEDED: [JSON array of specific questions about preparation methods, ingredients, or cooking details that would improve nutritional accuracy]
+
+                    COOKING_CONTEXT: [Any visible cooking methods, seasonings, oils, or preparation details you can observe]
+
+                    Please be specific about weights (estimate carefully based on visual portion sizes), cooking methods (baked, fried, grilled, etc.), and identify all visible food components. Focus on accuracy for nutritional calculation.
+                    """
+                }
                 
-                # Generate response
+                # Generate response with language-specific prompt
+                prompt = prompts.get(language, prompts['es'])
                 response = self.gemini_model.generate_content([prompt, image_part])
                 
                 # Parse Gemini response
                 analysis_result = self._parse_gemini_response(response.text)
                 analysis_result['analysis_method'] = 'gemini_vision_enhanced'
+                analysis_result['language'] = language
                 analysis_result['raw_response'] = response.text
                 
-                self.logger.info("✅ Gemini Vision enhanced analysis completed")
+                self.logger.info(f"✅ Gemini Vision enhanced analysis completed in {language}")
                 return analysis_result
                 
         except Exception as e:
             self.logger.error(f"Gemini Vision enhanced analysis failed: {str(e)}")
-            return self._fallback_detailed_analysis(image_data)
+            return self._fallback_detailed_analysis(image_data, language)
     
     def _parse_gemini_response(self, response_text: str) -> Dict[str, Any]:
         """Parse structured Gemini response into analysis result"""
@@ -238,9 +362,10 @@ class EnhancedFoodAnalysisHandler:
         
         return result
     
-    def _generate_clarification_questions(self, analysis_result: Dict[str, Any]) -> List[str]:
-        """Generate contextual clarification questions based on analysis"""
+    def _generate_clarification_questions(self, analysis_result: Dict[str, Any], language: str = 'es') -> List[str]:
+        """Generate contextual clarification questions based on analysis (BILINGUAL)"""
         questions = []
+        msgs = self.messages[language]
         
         # Use Gemini-provided clarification questions if available
         if analysis_result.get('clarification_needed'):
@@ -253,42 +378,43 @@ class EnhancedFoodAnalysisHandler:
             item_name = item.get('item', '').lower()
             
             # Cheese-specific questions
-            if 'cheese' in item_name:
-                questions.append("What type of cheese are the cubes made from?")
+            if 'cheese' in item_name or 'queso' in item_name:
+                questions.append(msgs['cheese_question'])
             
             # Fish/meat preparation questions
-            elif any(protein in item_name for protein in ['fish', 'chicken', 'beef', 'pork']):
-                questions.append(f"How was the {item_name} prepared (e.g., any added oils, seasonings, or sauces)?")
+            elif any(protein in item_name for protein in ['fish', 'chicken', 'beef', 'pork', 'pescado', 'pollo', 'carne']):
+                questions.append(msgs['cooking_question'].format(food=item_name))
             
             # Cooking method questions
             elif item.get('cooking_method') == 'unknown':
-                questions.append(f"How was the {item_name} cooked?")
+                questions.append(msgs['preparation_question'].format(food=item_name))
         
         # Limit to most relevant questions
         return questions[:3]
     
-    def _format_clarification_response(self, analysis_result: Dict[str, Any], questions: List[str], session_key: str) -> Dict[str, Any]:
-        """Format the initial response with clarification questions and buttons"""
+    def _format_clarification_response(self, analysis_result: Dict[str, Any], questions: List[str], session_key: str, language: str = 'es') -> Dict[str, Any]:
+        """Format the initial response with clarification questions and buttons (BILINGUAL)"""
         
-        description = analysis_result.get('food_description', 'Food items detected')
+        msgs = self.messages[language]
+        description = analysis_result.get('food_description', 'Alimentos detectados' if language == 'es' else 'Food items detected')
         
         message = f"{description}\n\n"
         
         if questions:
-            message += "Could you clarify a few details about your meal? (You can skip any question and simply press \"Analyze\" when you're ready.)\n"
+            message += f"{msgs['clarification_intro']}\n"
             for question in questions:
                 message += f"• {question}\n"
         else:
-            message += "Ready to analyze your meal?"
+            message += msgs['ready_question']
         
-        # ManyChat quick replies/buttons
+        # ManyChat quick replies/buttons (bilingual)
         quick_replies = [
             {
-                "title": "Analyze",
+                "title": msgs['buttons']['analyze'],
                 "payload": f"analyze_food:{session_key}"
             },
             {
-                "title": "New Log",
+                "title": msgs['buttons']['new_log'],
                 "payload": "new_food_log"
             }
         ]
@@ -303,7 +429,8 @@ class EnhancedFoodAnalysisHandler:
                 }]
             },
             'session_key': session_key,
-            'requires_clarification': True
+            'requires_clarification': True,
+            'language': language
         }
     
     def _generate_comprehensive_analysis(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
@@ -520,8 +647,10 @@ class EnhancedFoodAnalysisHandler:
         return recommendations
     
     def _format_multi_part_analysis_response(self, analysis: Dict[str, Any], food_log, user) -> Dict[str, Any]:
-        """Format the comprehensive multi-part analysis response"""
+        """Format the comprehensive multi-part analysis response (BILINGUAL)"""
         
+        user_lang = user.language or 'es'
+        msgs = self.messages[user_lang]
         nutrition = analysis['total_nutrition']
         food_score_data = analysis['food_score']
         recommendations = analysis['health_recommendations']
@@ -532,26 +661,32 @@ class EnhancedFoodAnalysisHandler:
         # Part 1: Initial message
         messages.append({
             'type': 'text',
-            'text': 'Analyzing, give me a sec...'
+            'text': msgs['analyzing']
         })
         
         # Part 2: Header
         messages.append({
             'type': 'text', 
-            'text': '📊 Here\'s your detailed nutritional analysis:'
+            'text': msgs['analysis_header']
         })
         
         # Part 3: Meal Description
-        meal_description = f"*Meal Description*:\n🍽️ {analysis.get('food_description', 'Mixed food items')}"
+        meal_description = f"{msgs['meal_description']}\n🍽️ {analysis.get('food_description', 'Alimentos mixtos' if user_lang == 'es' else 'Mixed food items')}"
         messages.append({
             'type': 'text',
             'text': meal_description
         })
         
-        # Part 4: Food Parameters
-        parameters_text = f"""*Food Parameters*:
-*Glycemic Load*: {analysis.get('glycemic_load', '📊 Moderate')}
-*Portion Size*: {analysis.get('portion_size_category', '🍽️ Medium')}
+        # Part 4: Food Parameters (localized)
+        glycemic_text = self._get_localized_glycemic_load(analysis.get('glycemic_load', 'moderate'), user_lang)
+        portion_text = self._get_localized_portion_size(analysis.get('portion_size_category', 'medium'), user_lang)
+        
+        parameters_text = f"""{msgs['food_parameters']}:
+*Carga Glucémica*: {glycemic_text}
+*Tamaño de Porción*: {portion_text}
+*Balance de Macronutrientes*: {analysis.get('macronutrient_balance', '⚖️ Balanceado' if user_lang == 'es' else '⚖️ Balanced')}""" if user_lang == 'es' else f"""{msgs['food_parameters']}:
+*Glycemic Load*: {glycemic_text}
+*Portion Size*: {portion_text}
 *Macronutrient Balance*: {analysis.get('macronutrient_balance', '⚖️ Balanced')}"""
         
         messages.append({
@@ -559,8 +694,84 @@ class EnhancedFoodAnalysisHandler:
             'text': parameters_text
         })
         
-        # Part 5: Detailed Nutrients
-        nutrients_text = f"""*Nutrients*:
+        # Part 5: Detailed Nutrients (localized labels)
+        nutrients_text = self._format_nutrients_section(nutrition, user_lang)
+        messages.append({
+            'type': 'text',
+            'text': nutrients_text
+        })
+        
+        # Part 6: Food Scores (localized)
+        scores_text = self._format_food_scores_section(food_score_data, user_lang)
+        messages.append({
+            'type': 'text',
+            'text': scores_text
+        })
+        
+        # Part 7: Additions for Sugar Spikes (localized)
+        if recommendations['additions']:
+            additions_text = f"{msgs['additions_header']}:\n" + "\n".join(f" - {rec}" for rec in recommendations['additions'])
+            messages.append({
+                'type': 'text',
+                'text': additions_text
+            })
+        
+        # Part 8: Replacements and Exclusions (localized)
+        if recommendations['replacements']:
+            replacements_text = f"{msgs['replacements_header']}:\n" + "\n".join(f" - {rec}" for rec in recommendations['replacements'])
+            messages.append({
+                'type': 'text',
+                'text': replacements_text
+            })
+        
+        return {
+            'version': 'v2',
+            'content': {
+                'messages': messages
+            },
+            'analysis_complete': True,
+            'food_log_id': food_log.id if food_log else None,
+            'language': user_lang
+        }
+    
+    def _get_localized_glycemic_load(self, glycemic_load: str, language: str) -> str:
+        """Get localized glycemic load text"""
+        if 'low' in glycemic_load.lower() or 'baja' in glycemic_load.lower():
+            return self.messages[language]['glycemic_load']['low']
+        elif 'high' in glycemic_load.lower() or 'alta' in glycemic_load.lower():
+            return self.messages[language]['glycemic_load']['high']
+        else:
+            return self.messages[language]['glycemic_load']['moderate']
+    
+    def _get_localized_portion_size(self, portion_size: str, language: str) -> str:
+        """Get localized portion size text"""
+        if 'small' in portion_size.lower() or 'pequeña' in portion_size.lower():
+            return self.messages[language]['portion_size']['small']
+        elif 'large' in portion_size.lower() or 'grande' in portion_size.lower():
+            return self.messages[language]['portion_size']['large']
+        elif 'extra' in portion_size.lower():
+            return self.messages[language]['portion_size']['extra_large']
+        else:
+            return self.messages[language]['portion_size']['medium']
+    
+    def _format_nutrients_section(self, nutrition: Dict[str, float], language: str) -> str:
+        """Format nutrients section with localized labels"""
+        if language == 'es':
+            return f"""*Nutrientes*:
+*Energía*: 🔥 {nutrition['calories']:.1f} kcal
+*Proteína*: 💪 {nutrition['protein']:.1f}g
+*Carbohidratos*: 🍞 {nutrition['carbs']:.1f}g
+*Fibra Total*: 🌱 {nutrition['fiber']:.1f}g
+*Azúcar Total*: 🍯 {nutrition.get('sugar', 0):.1f}g
+*Grasa Total*: 🥑 {nutrition['fat']:.1f}g
+*Grasa Saturada*: 🧈 {nutrition.get('saturated_fat', 0):.1f}g
+*Grasa Trans*: 🚫 0 g
+*Ácidos Grasos Omega-3*: 🐟 {nutrition.get('omega3', 0):.4f}g
+*Ácidos Grasos Omega-6*: 🌻 {nutrition.get('omega6', 0):.3f}g
+*Sodio*: 🧂 {nutrition['sodium']:.1f}mg
+*Alcohol*: 🚫 0 g"""
+        else:
+            return f"""*Nutrients*:
 *Energy*: 🔥 {nutrition['calories']:.1f} kcal
 *Protein*: 💪 {nutrition['protein']:.1f}g
 *Carbohydrates*: 🍞 {nutrition['carbs']:.1f}g
@@ -573,58 +784,61 @@ class EnhancedFoodAnalysisHandler:
 *Omega-6 Fatty Acids*: 🌻 {nutrition.get('omega6', 0):.3f}g
 *Sodium*: 🧂 {nutrition['sodium']:.1f}mg
 *Alcohol*: 🚫 0 g"""
-        
-        messages.append({
-            'type': 'text',
-            'text': nutrients_text
-        })
-        
-        # Part 6: Food Scores
-        score_reasons = ", ".join(food_score_data['reasons']) if food_score_data['reasons'] else "balanced nutritional profile"
-        scores_text = f"""*Food Scores*:
-*Overall Rating*: 💫 — {food_score_data['score']}/5 — {'Great Choice' if food_score_data['score'] >= 4 else 'Good Choice' if food_score_data['score'] >= 3 else 'Fair Choice'}
-*Should you eat this?*: {food_score_data['recommendation']}
-*Food Score Reason*: {score_reasons.capitalize()}"""
-        
-        messages.append({
-            'type': 'text',
-            'text': scores_text
-        })
-        
-        # Part 7: Additions for Sugar Spikes
-        if recommendations['additions']:
-            additions_text = "*What to Add to Decrease Sugar Spikes*:\n" + "\n".join(f" - {rec}" for rec in recommendations['additions'])
-            messages.append({
-                'type': 'text',
-                'text': additions_text
-            })
-        
-        # Part 8: Replacements and Exclusions
-        if recommendations['replacements']:
-            replacements_text = "*Replacements and Exclusions*:\n" + "\n".join(f" - {rec}" for rec in recommendations['replacements'])
-            messages.append({
-                'type': 'text',
-                'text': replacements_text
-            })
-        
-        return {
-            'version': 'v2',
-            'content': {
-                'messages': messages
-            },
-            'analysis_complete': True,
-            'food_log_id': food_log.id if food_log else None
-        }
     
-    def _fallback_detailed_analysis(self, image_data: bytes) -> Dict[str, Any]:
-        """Fallback analysis when Gemini Vision is not available"""
-        return {
-            'food_description': 'Mixed food items (detailed analysis unavailable)',
-            'food_items': [{'item': 'unknown food', 'weight_grams': 200}],
-            'confidence_score': 0.5,
-            'clarification_needed': ['What type of food is shown in the image?', 'How was it prepared?'],
-            'cooking_context': 'Unable to determine cooking method'
-        }
+    def _format_food_scores_section(self, food_score_data: Dict[str, Any], language: str) -> str:
+        """Format food scores section with localized text"""
+        score = food_score_data['score']
+        frequency = food_score_data['recommendation']
+        
+        # Get localized rating
+        if score >= 4.5:
+            rating = self.messages[language]['food_rating']['excellent']
+        elif score >= 4.0:
+            rating = self.messages[language]['food_rating']['great']
+        elif score >= 3.0:
+            rating = self.messages[language]['food_rating']['good']
+        elif score >= 2.0:
+            rating = self.messages[language]['food_rating']['fair']
+        else:
+            rating = self.messages[language]['food_rating']['poor']
+        
+        # Get localized frequency
+        freq_key = frequency.lower().split()[0]  # Get first word
+        localized_freq = self.messages[language]['frequency'].get(freq_key, frequency)
+        
+        score_reasons = ", ".join(food_score_data['reasons']) if food_score_data['reasons'] else (
+            "perfil nutricional balanceado" if language == 'es' else "balanced nutritional profile"
+        )
+        
+        if language == 'es':
+            return f"""*Puntuación Alimentaria*:
+*Calificación General*: 💫 — {score}/5 — {rating}
+*¿Deberías comer esto?*: {localized_freq}
+*Razón de la Puntuación*: {score_reasons.capitalize()}"""
+        else:
+            return f"""*Food Scores*:
+*Overall Rating*: 💫 — {score}/5 — {rating}
+*Should you eat this?*: {localized_freq}
+*Food Score Reason*: {score_reasons.capitalize()}"""
+    
+    def _fallback_detailed_analysis(self, image_data: bytes, language: str = 'es') -> Dict[str, Any]:
+        """Fallback analysis when Gemini Vision is not available (BILINGUAL)"""
+        if language == 'es':
+            return {
+                'food_description': 'Alimentos mixtos (análisis detallado no disponible)',
+                'food_items': [{'item': 'alimento desconocido', 'weight_grams': 200}],
+                'confidence_score': 0.5,
+                'clarification_needed': ['¿Qué tipo de comida se muestra en la imagen?', '¿Cómo fue preparada?'],
+                'cooking_context': 'No se puede determinar el método de cocción'
+            }
+        else:
+            return {
+                'food_description': 'Mixed food items (detailed analysis unavailable)',
+                'food_items': [{'item': 'unknown food', 'weight_grams': 200}],
+                'confidence_score': 0.5,
+                'clarification_needed': ['What type of food is shown in the image?', 'How was it prepared?'],
+                'cooking_context': 'Unable to determine cooking method'
+            }
     
     # Helper methods (implement remaining helper methods from original handler)
     def _get_or_create_user(self, subscriber_id: str):

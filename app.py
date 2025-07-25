@@ -215,6 +215,14 @@ class User(db.Model):
     quiz_completed = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     
+    # NEW: Language support
+    language = db.Column(db.String(5), default='es')  # 'es' for Spanish (default), 'en' for English
+    
+    # Quiz progress tracking
+    current_quiz_step = db.Column(db.Integer, default=0)
+    quiz_data = db.Column(db.Text, nullable=True)  # JSON string for quiz responses
+    last_interaction = db.Column(db.DateTime, default=datetime.utcnow)
+    
     # NEW: Subscription fields
     subscription_tier = db.Column(db.String(20), default='trial_pending')  # trial_pending, trial_active, active, cancelled, expired
     subscription_status = db.Column(db.String(20), default='inactive')  # inactive, trial_active, active, cancelled, expired

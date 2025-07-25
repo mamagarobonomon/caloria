@@ -4,6 +4,8 @@
 
 This document provides step-by-step instructions for configuring ManyChat to support the enhanced food logging system with Gemini Vision AI, clarification questions, and multi-part responses.
 
+**🌍 BILINGUAL SUPPORT: Spanish (default) & English**
+
 ---
 
 ## 📋 **PREREQUISITES**
@@ -11,19 +13,72 @@ This document provides step-by-step instructions for configuring ManyChat to sup
 - ✅ WhatsApp Business Account verified and approved
 - ✅ ManyChat account connected to WhatsApp Business
 - ✅ Caloria server deployed and running at https://caloria.vip
-- ✅ Enhanced food logging system deployed (completed)
+- ✅ Enhanced bilingual food logging system deployed (completed)
 
 ---
 
-## 🔧 **STEP 1: WEBHOOK CONFIGURATION**
+## 🌍 **STEP 1: LANGUAGE DETECTION & SETUP**
 
-### **1.1 Basic Webhook Setup**
+### **1.1 Language Strategy Configuration**
+
+**Default Language Behavior:**
+```
+Default: Spanish (es) 
+Alternative: English (en)
+Detection: Automatic based on user input
+Storage: User.language field in database
+```
+
+**Language Detection Methods:**
+```
+Method 1: Automatic detection from first message
+Method 2: Language selection buttons
+Method 3: Command-based switching (/lang en, /lang es)
+Recommended: Combination of all methods
+```
+
+### **1.2 Language Switching Flow**
+
+**Create Language Selection Flow:**
+```
+Flow Name: "Language Selection"
+Trigger: Keywords ["language", "idioma", "lang", "english", "español"]
+
+Message (Bilingual):
+🌍 Language / Idioma
+
+Choose your preferred language:
+Elige tu idioma preferido:
+
+Buttons:
+🇪🇸 Español
+🇺🇸 English
+```
+
+**Button Actions:**
+```
+Spanish Button:
+- Payload: "set_language:es"
+- Action: Send to webhook
+- Response: "🇪🇸 Idioma cambiado a español..."
+
+English Button:
+- Payload: "set_language:en" 
+- Action: Send to webhook
+- Response: "🇺🇸 Language switched to English..."
+```
+
+---
+
+## 🔧 **STEP 2: WEBHOOK CONFIGURATION**
+
+### **2.1 Enhanced Webhook Setup**
 
 Navigate to: **ManyChat → Settings → Integrations → Webhooks**
 
 **Configure Main Webhook:**
 ```
-Webhook Name: Caloria Enhanced Food Analysis
+Webhook Name: Caloria Enhanced Food Analysis (Bilingual)
 URL: https://caloria.vip/webhook/manychat
 Method: POST
 Content-Type: application/json
@@ -34,8 +89,9 @@ Content-Type: application/json
 - ✅ Quick Reply Selected
 - ✅ Attachment Received
 - ✅ User Input
+- ✅ Language Detection
 
-### **1.2 Webhook Data Payload**
+### **2.2 Bilingual Webhook Data Payload**
 
 **Configure Webhook to Send:**
 ```json
@@ -50,48 +106,53 @@ Content-Type: application/json
   },
   "first_name": "{{first_name}}",
   "last_name": "{{last_name}}",
-  "timestamp": "{{current_timestamp}}"
+  "timestamp": "{{current_timestamp}}",
+  "user_language": "{{language}}",
+  "locale": "{{locale}}"
 }
 ```
 
 ---
 
-## 🎯 **STEP 2: FLOW SETUP FOR ENHANCED FOOD ANALYSIS**
+## 🎯 **STEP 3: BILINGUAL FLOW SETUP**
 
-### **2.1 Create Main Food Logging Flow**
+### **3.1 Create Enhanced Food Analysis Flow**
 
 **Flow Details:**
 ```
-Flow Name: "Enhanced Food Analysis"
-Description: "Comprehensive food logging with Gemini Vision AI"
+Flow Name: "Enhanced Food Analysis (Bilingual)"
+Description: "Comprehensive food logging with Gemini Vision AI in Spanish/English"
 Status: Active
+Default Language: Spanish
 ```
 
 **Flow Triggers:**
-- Keywords: ["food", "meal", "analyze", "nutrition", "calories"]
+- Keywords: ["food", "meal", "analyze", "nutrition", "calories", "comida", "analizar", "nutrición", "calorías"]
 - Image Upload (any image attachment)
 - Default reply for unrecognized content
 
-### **2.2 Flow Structure**
+### **3.2 Language-Aware Flow Structure**
 
 ```
-Flow Sequence:
-1. User Input (Image/Text) → 
-2. Send to Webhook → 
-3. Dynamic Response → 
-4. Handle User Interaction → 
-5. Final Analysis/New Log
+Bilingual Flow Sequence:
+1. Language Detection → 
+2. User Input (Image/Text) → 
+3. Send to Webhook (with language) → 
+4. Dynamic Response (language-specific) → 
+5. Handle User Interaction → 
+6. Final Analysis/New Log (localized)
 ```
 
-**Node 1: Input Detection**
+**Node 1: Language Detection**
 ```
-Condition: Check message type
-- If Image: Go to Image Analysis
-- If Text: Go to Text Processing
-- If Quick Reply: Go to Button Handler
+Condition: Check user language preference
+- If language not set: Show language selection
+- If Spanish: Use Spanish flow
+- If English: Use English flow
+- Store language preference in custom field
 ```
 
-**Node 2: Image Analysis Webhook**
+**Node 2: Enhanced Image Analysis**
 ```
 Action Type: External Request
 URL: https://caloria.vip/webhook/manychat
@@ -101,141 +162,157 @@ Variables to Send:
 - type: "image"
 - image_url: {{attachment_url}}
 - attachments: {{attachments}}
+- user_language: {{language}}
 ```
 
-**Node 3: Dynamic Response Handler**
+**Node 3: Language-Specific Response**
 ```
 Response Processing:
 - Parse webhook response JSON
-- Display message content
-- Show quick reply buttons if present
+- Display message in user's language
+- Show quick reply buttons (localized)
 - Store session_key for clarification flow
 ```
 
 ---
 
-## 🔘 **STEP 3: QUICK REPLY BUTTON CONFIGURATION**
+## 🔘 **STEP 4: BILINGUAL QUICK REPLY CONFIGURATION**
 
-### **3.1 Analyze Button Setup**
+### **4.1 Spanish Button Setup**
 
-**Button Configuration:**
+**Analyze Button (Spanish):**
+```
+Button Title: "Analizar"
+Button Type: Quick Reply
+Payload Format: "analyze_food:{{session_key}}"
+Action: Send to External Webhook
+Language: Spanish (es)
+```
+
+**New Log Button (Spanish):**
+```
+Button Title: "Nuevo Registro"
+Button Type: Quick Reply
+Payload: "new_food_log"
+Action: Send to External Webhook
+Language: Spanish (es)
+```
+
+### **4.2 English Button Setup**
+
+**Analyze Button (English):**
 ```
 Button Title: "Analyze"
 Button Type: Quick Reply
 Payload Format: "analyze_food:{{session_key}}"
 Action: Send to External Webhook
+Language: English (en)
 ```
 
-**Webhook Action for Analyze:**
-```
-URL: https://caloria.vip/webhook/manychat
-Method: POST
-Data:
-{
-  "subscriber_id": "{{user_id}}",
-  "type": "quick_reply",
-  "quick_reply": {
-    "payload": "{{payload}}"
-  }
-}
-```
-
-### **3.2 New Log Button Setup**
-
-**Button Configuration:**
+**New Log Button (English):**
 ```
 Button Title: "New Log"
 Button Type: Quick Reply
 Payload: "new_food_log"
 Action: Send to External Webhook
+Language: English (en)
 ```
 
-**Webhook Action for New Log:**
+### **4.3 Language Switch Buttons**
+
+**Language Toggle Buttons:**
 ```
-URL: https://caloria.vip/webhook/manychat
-Method: POST
-Data:
-{
-  "subscriber_id": "{{user_id}}",
-  "type": "quick_reply",
-  "quick_reply": {
-    "payload": "new_food_log"
-  }
-}
+Spanish Switch:
+- Title: "🇪🇸 Español"
+- Payload: "set_language:es"
+- Always available in menu
+
+English Switch:
+- Title: "🇺🇸 English"  
+- Payload: "set_language:en"
+- Always available in menu
 ```
 
 ---
 
-## 📱 **STEP 4: MESSAGE TYPE ROUTING**
+## 📱 **STEP 5: BILINGUAL MESSAGE ROUTING**
 
-### **4.1 Image Message Handler**
+### **5.1 Image Message Handler (Language-Aware)**
 
 **Trigger Configuration:**
 ```
 Trigger: User uploads image/photo
 Condition: Attachment type = image
+Language Detection: Automatic
 Actions:
-1. Extract image URL
-2. Send to webhook with image data
-3. Display response with clarification questions
-4. Show quick reply buttons
+1. Detect/confirm user language
+2. Extract image URL
+3. Send to webhook with language data
+4. Display response with localized clarification questions
+5. Show language-appropriate quick reply buttons
 ```
 
 **Implementation:**
 ```
-Step 1: Detect Image Upload
-- Condition: {{attachment_type}} = "image"
+Step 1: Language Check
+- Check user language preference
+- Default to Spanish if not set
 
 Step 2: Send to Webhook
 - URL: https://caloria.vip/webhook/manychat
-- Include image URL and user data
+- Include image URL, user data, and language
 
-Step 3: Display Response
-- Show webhook response message
-- Display quick reply buttons
-- Store session information
+Step 3: Display Localized Response
+- Show webhook response message in user's language
+- Display quick reply buttons (localized)
+- Store session information with language context
 ```
 
-### **4.2 Text Message Handler**
+### **5.2 Text Message Handler (Bilingual)**
 
 **Trigger Configuration:**
 ```
 Trigger: User sends text message
-Condition: No quick reply payload present
-Purpose: Handle clarification responses
+Language Detection: Automatic from content
+Purpose: Handle clarification responses and general text
 ```
 
 **Implementation:**
 ```
-Step 1: Check for Active Session
-- Look for pending food analysis
+Step 1: Language Detection
+- Analyze text for language indicators
+- Update user language preference if detected
+- Default to existing user language
 
-Step 2: Send as Clarification
-- URL: https://caloria.vip/webhook/manychat
-- Include text as clarification input
+Step 2: Content Routing
+- If clarification session active: Send as clarification
+- If language command: Handle language switch
+- If food description: Process food analysis
+- If quiz response: Handle quiz flow
 
-Step 3: Process Response
-- Display comprehensive analysis
-- Complete food logging session
+Step 3: Localized Response
+- Return response in user's preferred language
+- Include appropriate error messages if needed
 ```
 
-### **4.3 Quick Reply Handler**
+### **5.3 Language Command Handler**
 
-**Trigger Configuration:**
+**Commands Setup:**
 ```
-Trigger: User clicks quick reply button
-Condition: Payload present
-Actions:
-1. Extract payload data
-2. Send to appropriate webhook endpoint
-3. Process response
+Spanish Commands:
+- "/español" or "/es" → Set language to Spanish
+- "/idioma" → Show language selection menu
+
+English Commands:
+- "/english" or "/en" → Set language to English
+- "/language" → Show language selection menu
 ```
 
 ---
 
-## 🔄 **STEP 5: RESPONSE HANDLING CONFIGURATION**
+## 🔄 **STEP 6: BILINGUAL RESPONSE HANDLING**
 
-### **5.1 Dynamic Response Processing**
+### **6.1 Dynamic Response Processing (Language-Aware)**
 
 **Response Format Support:**
 ```javascript
@@ -246,276 +323,324 @@ Expected Webhook Response:
     "messages": [
       {
         "type": "text",
-        "text": "Response message",
+        "text": "Response message in user's language",
         "quick_replies": [
-          {"title": "Analyze", "payload": "analyze_food:session_key"},
-          {"title": "New Log", "payload": "new_food_log"}
+          {"title": "Analizar/Analyze", "payload": "analyze_food:session_key"},
+          {"title": "Nuevo Registro/New Log", "payload": "new_food_log"}
         ]
       }
     ]
   },
   "session_key": "food_analysis_user_timestamp",
-  "requires_clarification": true
+  "requires_clarification": true,
+  "language": "es/en"
 }
 ```
 
-### **5.2 Multi-Message Response Handler**
+### **6.2 Multi-Message Response Handler (Bilingual)**
 
 **For Comprehensive Analysis:**
 ```
-Response Type: Multiple sequential messages
+Response Type: Multiple sequential messages (language-specific)
 Separator: "---"
 Format: Individual message cards
+Language: Based on user preference
 Actions:
 1. Parse messages array
-2. Send each message sequentially
+2. Send each message sequentially in user's language
 3. Add delays between messages (2-3 seconds)
-4. Complete analysis flow
+4. Complete analysis flow with localized completion message
 ```
 
-### **5.3 Error Handling**
+### **6.3 Error Handling (Bilingual)**
 
 **Fallback Responses:**
 ```
-Webhook Error: "❌ Sorry, I couldn't analyze your food. Please try again."
-Image Error: "❌ Unable to process image. Please send a clearer photo."
-Session Expired: "❌ Session expired. Please send your photo again."
-Unknown Error: "❌ Something went wrong. Please try again."
+Spanish Errors:
+- Webhook Error: "❌ Lo siento, no pude analizar tu comida. Por favor intenta de nuevo."
+- Image Error: "❌ No pude procesar la imagen. Por favor envía una foto más clara."
+- Session Expired: "❌ Sesión expirada. Por favor envía tu foto de nuevo."
+- Unknown Error: "❌ Algo salió mal. Por favor intenta de nuevo."
+
+English Errors:
+- Webhook Error: "❌ Sorry, I couldn't analyze your food. Please try again."
+- Image Error: "❌ Unable to process image. Please send a clearer photo."
+- Session Expired: "❌ Session expired. Please send your photo again."
+- Unknown Error: "❌ Something went wrong. Please try again."
 ```
 
 ---
 
-## ⚙️ **STEP 6: CUSTOM FIELDS AND VARIABLES**
+## ⚙️ **STEP 7: BILINGUAL CUSTOM FIELDS**
 
-### **6.1 Required Custom Fields**
+### **7.1 Required Custom Fields**
 
 **Create Custom Fields:**
 ```
-1. Food Analysis Session
+1. User Language
+   - Field Name: user_language
+   - Type: Text
+   - Default: "es"
+   - Purpose: Store user's preferred language
+
+2. Food Analysis Session
    - Field Name: food_session_key
    - Type: Text
    - Purpose: Store active analysis session
 
-2. Last Analysis Timestamp  
-   - Field Name: last_food_analysis
-   - Type: DateTime
-   - Purpose: Track analysis frequency
-
-3. Pending Clarification
-   - Field Name: pending_clarification
+3. Language Detection Status
+   - Field Name: language_detected
    - Type: Boolean
-   - Purpose: Track clarification state
+   - Purpose: Track if language has been auto-detected
 
-4. Analysis Count
-   - Field Name: total_food_analyses
+4. Last Message Language
+   - Field Name: last_message_lang
+   - Type: Text
+   - Purpose: Track language of last interaction
+
+5. Analysis Count by Language
+   - Field Name: analysis_count_es
+   - Field Name: analysis_count_en
    - Type: Number
-   - Purpose: Track user engagement
+   - Purpose: Track usage by language
 ```
 
-### **6.2 Session Management**
+### **7.2 Language Session Management**
 
 **Session Storage:**
 ```
 On Image Analysis:
-- Store session_key in custom field
+- Store session_key with language context
 - Set pending_clarification = true
-- Record timestamp
+- Record language used for analysis
+- Update last_message_lang field
 
 On Analysis Complete:
 - Clear session_key
 - Set pending_clarification = false
-- Increment analysis_count
+- Increment language-specific analysis count
+- Maintain language preference
 ```
 
 ---
 
-## 🧪 **STEP 7: TESTING CONFIGURATION**
+## 🧪 **STEP 8: BILINGUAL TESTING CONFIGURATION**
 
-### **7.1 Test Scenarios**
+### **8.1 Language-Specific Test Scenarios**
 
-**Image Upload Test:**
+**Spanish Testing:**
 ```
-1. Send test image to bot
-2. Verify webhook receives image URL
-3. Check response shows description + questions
-4. Confirm buttons are clickable
-5. Validate session management
-```
-
-**Button Click Test:**
-```
-1. Click "Analyze" button
-2. Verify payload sent to webhook
-3. Check comprehensive response received
-4. Confirm multi-message formatting
-5. Validate session cleanup
+1. Send "hola" → Verify Spanish language detection
+2. Upload food image → Check Spanish clarification questions
+3. Click "Analizar" → Verify Spanish comprehensive response
+4. Send "nuevo registro" → Check Spanish new log prompt
+5. Test language switching to English
 ```
 
-**Text Clarification Test:**
+**English Testing:**
 ```
-1. Send image, get clarification questions
-2. Send text response (e.g., "cheddar cheese")
-3. Verify text processed as clarification
-4. Check enhanced analysis received
-5. Confirm flow completion
+1. Send "hello" → Verify English language detection
+2. Upload food image → Check English clarification questions
+3. Click "Analyze" → Verify English comprehensive response  
+4. Send "new log" → Check English new log prompt
+5. Test language switching to Spanish
 ```
 
-### **7.2 Debug Mode Setup**
+**Mixed Language Testing:**
+```
+1. Start in Spanish, switch to English mid-session
+2. Test session persistence across language changes
+3. Verify error messages appear in correct language
+4. Test clarification responses in both languages
+```
 
-**Enable ManyChat Debug:**
+### **8.2 Language Detection Debug**
+
+**Enable ManyChat Debug for Languages:**
 ```
 Settings → General → Debug Mode: ON
-- View webhook requests/responses
-- Monitor flow execution
-- Check variable values
-- Validate custom field updates
+Language Tracking: Enabled
+- Monitor language detection accuracy
+- View webhook requests with language data
+- Check custom field updates for language
+- Validate bilingual flow execution
 ```
 
 ---
 
-## 🚨 **STEP 8: CRITICAL CONFIGURATION CHECKLIST**
+## 🚨 **STEP 9: BILINGUAL CONFIGURATION CHECKLIST**
 
-### **8.1 Must-Configure Items**
+### **9.1 Must-Configure Items (Language-Aware)**
 
-- [ ] **Webhook URL**: https://caloria.vip/webhook/manychat configured
-- [ ] **Image uploads** trigger webhook with attachment URL
-- [ ] **Quick reply buttons** display correctly after image analysis
-- [ ] **Button clicks** send correct payloads to webhook
-- [ ] **Multi-message responses** display properly with separators
-- [ ] **Session management** works for clarification flow
-- [ ] **Error handling** provides meaningful fallback messages
-- [ ] **Custom fields** store session and user data
+- [ ] **Webhook URL**: https://caloria.vip/webhook/manychat configured with language support
+- [ ] **Language detection** automatic and manual methods working
+- [ ] **Spanish image uploads** trigger webhook with Spanish clarification
+- [ ] **English image uploads** trigger webhook with English clarification
+- [ ] **Bilingual quick reply buttons** display correctly after analysis
+- [ ] **Language-specific button clicks** send correct payloads
+- [ ] **Multi-message responses** display in user's preferred language
+- [ ] **Session management** maintains language context
+- [ ] **Error handling** provides messages in correct language
+- [ ] **Language switching** works via buttons and commands
 
-### **8.2 Performance Settings**
+### **9.2 Language Performance Settings**
 
-**Optimize for Enhanced Experience:**
+**Optimize for Bilingual Experience:**
 ```
-Message Delays: 2-3 seconds between multi-part responses
-Webhook Timeout: 30 seconds
-Image Processing: Support PNG, JPG, JPEG formats
+Spanish Response Time: <5 seconds target
+English Response Time: <5 seconds target
+Language Detection: <1 second
+Language Switching: Immediate
+Image Processing: Support both language prompts
 File Size Limit: 16MB maximum
-Response Time: <5 seconds target
+Response Accuracy: 95%+ in detected language
 ```
 
 ---
 
-## 📊 **STEP 9: MONITORING AND ANALYTICS**
+## 📊 **STEP 10: BILINGUAL MONITORING & ANALYTICS**
 
-### **9.1 Track Key Metrics**
+### **10.1 Language-Specific Metrics**
 
-**Important Metrics to Monitor:**
+**Track Key Metrics by Language:**
 ```
+Spanish Users:
 - Image analyses per day
 - Clarification question engagement rate
+- Button click rates (Analizar vs Nuevo Registro)
+- Error rates and response times
+
+English Users:
+- Image analyses per day  
+- Clarification question engagement rate
 - Button click rates (Analyze vs New Log)
-- Webhook response times
-- Error rates and types
-- User completion rates
+- Error rates and response times
+
+Mixed Language:
+- Language switching frequency
+- Session completion rates across languages
+- User preference changes over time
 ```
 
-### **9.2 Analytics Setup**
+### **10.2 Bilingual Analytics Setup**
 
 **Configure ManyChat Analytics:**
 ```
-Conversion Goals:
-- Successful food analysis completion
-- User engagement with clarification questions
-- Multi-day usage retention
+Spanish Conversion Goals:
+- successful_food_analysis_es
+- clarification_engagement_es
+- multi_day_usage_retention_es
 
-Custom Events:
-- image_analysis_started
-- clarification_provided
-- analysis_completed
-- new_log_initiated
+English Conversion Goals:
+- successful_food_analysis_en
+- clarification_engagement_en
+- multi_day_usage_retention_en
+
+Language Events:
+- language_detected_spanish
+- language_detected_english
+- language_switched_es_to_en
+- language_switched_en_to_es
+- bilingual_user_identified
 ```
 
 ---
 
-## 🎯 **STEP 10: GO-LIVE PREPARATION**
+## 🎯 **STEP 11: BILINGUAL GO-LIVE PREPARATION**
 
-### **10.1 Final Checklist**
+### **11.1 Final Bilingual Checklist**
 
 **Before Enabling for Users:**
-- [ ] All webhook endpoints tested and responding
-- [ ] Image analysis produces expected clarification questions
-- [ ] Buttons work and send correct payloads
-- [ ] Multi-part responses display correctly
-- [ ] Session management functions properly
-- [ ] Error handling provides good user experience
-- [ ] Performance meets targets (<5 sec response)
+- [ ] Spanish and English webhook endpoints tested
+- [ ] Both language image analyses produce expected results
+- [ ] Bilingual buttons work correctly
+- [ ] Multi-part responses display in correct language
+- [ ] Language detection and switching functions
+- [ ] Error handling works in both languages
+- [ ] Session management maintains language context
+- [ ] Performance meets targets in both languages
 
-### **10.2 User Communication**
+### **11.2 Bilingual User Communication**
 
-**Announcement Message:**
+**Announcement Message (Bilingual):**
 ```
-🎉 NEW: Enhanced Food Analysis!
+🎉 NEW: Enhanced Food Analysis! / ¡NUEVO: Análisis Avanzado de Alimentos!
 
-Send me a photo of your meal and I'll provide:
+🇪🇸 Envíame una foto de tu comida y te proporcionaré:
+✨ Identificación detallada de alimentos con pesos
+📋 Preguntas de aclaración para mayor precisión  
+📊 Análisis nutricional comprehensivo
+💡 Recomendaciones de salud personalizadas
+
+🇺🇸 Send me a photo of your meal and I'll provide:
 ✨ Detailed food identification with weights
 📋 Clarification questions for accuracy
-📊 Comprehensive nutritional analysis
+📊 Comprehensive nutritional analysis  
 💡 Personalized health recommendations
 
-Try it now - just send a photo! 📸
+Try it now - just send a photo! / ¡Pruébalo ahora - solo envía una foto! 📸
 ```
 
 ---
 
-## 🚀 **IMPLEMENTATION TIMELINE**
+## 🚀 **BILINGUAL IMPLEMENTATION TIMELINE**
 
-**Estimated Setup Time: 2-4 hours**
+**Estimated Setup Time: 3-5 hours**
 
 ```
-Phase 1 (30 min): Basic webhook configuration
-Phase 2 (60 min): Flow setup and message routing  
-Phase 3 (45 min): Button configuration and response handling
-Phase 4 (60 min): Testing and debugging
-Phase 5 (15 min): Go-live preparation
+Phase 1 (45 min): Language detection and webhook configuration
+Phase 2 (90 min): Bilingual flow setup and message routing  
+Phase 3 (60 min): Button configuration and response handling
+Phase 4 (90 min): Comprehensive bilingual testing
+Phase 5 (15 min): Go-live preparation and user communication
 ```
 
 ---
 
-## 📞 **SUPPORT AND TROUBLESHOOTING**
+## 📞 **BILINGUAL SUPPORT & TROUBLESHOOTING**
 
-### **Common Issues:**
+### **Common Language Issues:**
 
-**Webhook Not Responding:**
-- Check server status at https://caloria.vip/health
-- Verify webhook URL configuration
-- Test endpoint manually with Postman
+**Language Detection Not Working:**
+- Check webhook receives language data
+- Verify language detection logic in webhook handler
+- Test with clear Spanish/English phrases
 
-**Buttons Not Working:**
-- Verify quick reply payload format
-- Check webhook receives button data
-- Validate response handling logic
+**Wrong Language Responses:**
+- Confirm user language field in database
+- Check webhook language parameter
+- Verify message templates for both languages
 
-**Images Not Processing:**
-- Confirm image URL accessible
-- Check file size and format
-- Verify Gemini Vision AI availability
+**Language Switching Issues:**
+- Test language switch payloads
+- Check custom field updates
+- Verify session maintains language context
 
-**Session Management Issues:**
-- Check custom field configuration
-- Verify session key generation
-- Test session retrieval logic
-
----
-
-## ✅ **COMPLETION CONFIRMATION**
-
-Once all steps are completed, the enhanced food logging system will provide:
-
-✅ **Detailed food analysis** with Gemini Vision AI
-✅ **Interactive clarification questions** 
-✅ **Professional multi-part responses**
-✅ **Seamless button interactions**
-✅ **Comprehensive nutritional insights**
-
-**Your users will experience professional-grade food analysis with personalized recommendations!** 🥗📊✨
+**Mixed Language Sessions:**
+- Check session management with language context
+- Verify clarification questions match user language
+- Test session persistence across language changes
 
 ---
 
-**Document Version:** 1.0  
+## ✅ **BILINGUAL COMPLETION CONFIRMATION**
+
+Once all steps are completed, the enhanced bilingual food logging system will provide:
+
+✅ **Detailed food analysis** with Gemini Vision AI in Spanish/English
+✅ **Interactive clarification questions** in user's preferred language
+✅ **Professional multi-part responses** fully localized
+✅ **Seamless bilingual button interactions**
+✅ **Comprehensive nutritional insights** with cultural awareness
+✅ **Automatic language detection** and manual switching
+✅ **Error handling** in appropriate language
+
+**Your users will experience professional-grade food analysis with personalized recommendations in their preferred language!** 🥗📊🌍✨
+
+---
+
+**Document Version:** 2.0 (Bilingual)  
 **Last Updated:** December 2024  
 **Status:** Ready for Implementation  
-**Required After:** WhatsApp Business Account Verification 
+**Required After:** WhatsApp Business Account Verification  
+**Languages Supported:** Spanish (default) & English 

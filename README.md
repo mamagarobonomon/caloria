@@ -194,6 +194,20 @@ python app.py
 
 *Either `GOOGLE_APPLICATION_CREDENTIALS` or `GOOGLE_CLOUD_KEY_JSON` is required for Google Cloud APIs.
 
+### **🔐 Google Cloud Authentication (Important)**
+
+**✅ Service Account JSON Authentication:**
+- Caloria uses **Service Account JSON** for all Google Cloud APIs (Vertex AI Gemini, Vision API, Speech-to-Text)
+- **Two options**: File path (`GOOGLE_APPLICATION_CREDENTIALS`) or JSON content (`GOOGLE_CLOUD_KEY_JSON`)
+- **No API keys needed** - Google Cloud advanced AI services require service account authentication
+
+**📋 Setup Steps:**
+1. Create Google Cloud Service Account in your project
+2. Download JSON credentials file
+3. Set either environment variable (see `GOOGLE_CLOUD_GUIDE.md` for details)
+
+**❌ Note:** `GOOGLE_CLOUD_API_KEY` is deprecated and removed as of January 2025.
+
 ## 🏗️ **Clean Project Structure**
 
 After recent cleanup (January 2025), the project maintains a well-organized structure:

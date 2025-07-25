@@ -190,7 +190,36 @@ google-cloud-speech==2.21.0
 GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 # OR
 GOOGLE_CLOUD_KEY_JSON='{"type":"service_account",...}'
+
+# ⚠️ IMPORTANT: NO API KEY REQUIRED
+# Google Cloud services (Vertex AI, Vision API, Speech-to-Text) use Service Account JSON authentication
+# API keys are NOT used for these services - only Service Account credentials
 ```
+
+### **🔐 Authentication Method: Service Account JSON**
+
+**✅ Current Implementation:**
+Your Caloria application uses **Service Account JSON authentication** for all Google Cloud APIs:
+
+- **Vertex AI (Gemini Vision)**: Authenticated via `vertexai.init()` with default credentials
+- **Cloud Vision API**: Uses `vision.ImageAnnotatorClient()` with default credentials  
+- **Cloud Speech-to-Text**: Uses `speech.SpeechClient()` with default credentials
+
+**How it works:**
+```python
+# The Google Cloud libraries automatically detect credentials from:
+# 1. GOOGLE_APPLICATION_CREDENTIALS environment variable (file path)
+# 2. GOOGLE_CLOUD_KEY_JSON environment variable (JSON content)
+# 3. Default service account (when running on Google Cloud)
+
+# Example from your code:
+vertexai.init(project=project_id, location=location)  # Uses default credentials
+client = vision.ImageAnnotatorClient()  # Uses default credentials
+```
+
+**❌ What's NOT used:**
+- ~~`GOOGLE_CLOUD_API_KEY`~~ - This is deprecated and not needed
+- ~~API Keys~~ - Not supported for Vertex AI or advanced AI services
 
 ### **Enhanced Features**
 

@@ -25,7 +25,17 @@ DATABASE_URL=postgresql://caloria_vip_user:${DB_PASSWORD}@localhost/caloria_vip_
 SPOONACULAR_API_KEY=3e0eac47470049d6845406463f223518
 MANYCHAT_API_TOKEN=your-manychat-token-here
 OPENAI_API_KEY=your-openai-api-key-here
-GOOGLE_CLOUD_API_KEY=your-google-cloud-api-key-here
+
+# Google Cloud Authentication (Service Account JSON)
+# Choose ONE of the following methods:
+# Method 1: File path (recommended for production)
+# GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+# Method 2: JSON content directly (for containerized deployments)
+# GOOGLE_CLOUD_KEY_JSON={"type":"service_account","project_id":"your-project",...}
+
+# Google Cloud Project Configuration
+GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
 
 # Admin Configuration
 DEFAULT_ADMIN_USERNAME=admin

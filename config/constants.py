@@ -16,7 +16,7 @@ class AppConstants:
     DOWNLOAD_TIMEOUT = 30
     WEBHOOK_TIMEOUT = 22  # Mercado Pago requirement
     API_REQUEST_TIMEOUT = 30
-    SPOONACULAR_TIMEOUT = 30
+    # SPOONACULAR_TIMEOUT = 30  # Removed - using Gemini Vision AI only
     GOOGLE_CLOUD_TIMEOUT = 30
     
     # Food analysis confidence scores
@@ -108,11 +108,7 @@ class Messages:
 class APIEndpoints:
     """External API endpoints"""
     
-    # Spoonacular
-    SPOONACULAR_BASE = "https://api.spoonacular.com"
-    SPOONACULAR_CLASSIFY = f"{SPOONACULAR_BASE}/food/images/classify"
-    SPOONACULAR_ANALYZE = f"{SPOONACULAR_BASE}/food/images/analyze"
-    SPOONACULAR_PARSE = f"{SPOONACULAR_BASE}/recipes/parseIngredients"
+    # Spoonacular endpoints removed - now using Gemini Vision AI only
     
     # ManyChat
     MANYCHAT_BASE = "https://api.manychat.com"

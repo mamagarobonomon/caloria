@@ -1,0 +1,145 @@
+/* Caloria Logo Styles - Rainbow Gradient */
+.caloria-logo {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 700;
+    background: linear-gradient(
+        90deg, 
+        #10b981 0%,    /* Green - 'ca' */
+        #eab308 25%,   /* Yellow - 'l' */
+        #f97316 40%,   /* Orange - 'o' */
+        #ef4444 55%,   /* Red - 'r' */
+        #8b5cf6 75%,   /* Purple - 'i' */
+        #3b82f6 100%   /* Blue - 'a' */
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
+    display: inline-block;
+    letter-spacing: -0.02em;
+}
+
+@keyframes shimmer {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+/* Logo sizes */
+.caloria-logo-sm {
+    font-size: 1.25rem;
+}
+
+.caloria-logo-md {
+    font-size: 1.75rem;
+}
+
+.caloria-logo-lg {
+    font-size: 2.5rem;
+}
+
+.caloria-logo-xl {
+    font-size: 3.5rem;
+}
+
+/* Logo with icon */
+.caloria-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    transition: transform 0.3s ease;
+}
+
+.caloria-brand:hover {
+    transform: scale(1.05);
+}
+
+.caloria-brand:hover .caloria-logo {
+    animation-duration: 1s;
+}
+
+/* Navigation specific styles */
+.navbar .caloria-logo {
+    font-size: 1.5rem;
+}
+
+.sidebar .caloria-logo {
+    font-size: 1.25rem;
+}
+
+/* Hero section logo */
+.hero-logo {
+    font-size: 4rem;
+    line-height: 1;
+    margin-bottom: 2rem;
+}
+
+/* Dark background adjustments */
+.dark-bg .caloria-logo {
+    background: linear-gradient(
+        90deg, 
+        #34d399 0%,    /* Lighter green */
+        #fbbf24 25%,   /* Lighter yellow */
+        #fb923c 40%,   /* Lighter orange */
+        #f87171 55%,   /* Lighter red */
+        #a78bfa 75%,   /* Lighter purple */
+        #60a5fa 100%   /* Lighter blue */
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .hero-logo {
+        font-size: 2.5rem;
+    }
+    
+    .navbar .caloria-logo {
+        font-size: 1.25rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-logo {
+        font-size: 2rem;
+    }
+}
+
+/* Alternative logo with background (for cases where gradient text doesn't work) */
+.caloria-logo-bg {
+    background: linear-gradient(
+        90deg, 
+        #10b981 0%, 
+        #eab308 25%, 
+        #f97316 40%, 
+        #ef4444 55%, 
+        #8b5cf6 75%, 
+        #3b82f6 100%
+    );
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    font-weight: 700;
+    display: inline-block;
+}
+
+/* Loading states */
+.caloria-logo.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+} 

@@ -9,6 +9,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Caloria Logo Styles -->
+    <link href="{{ url_for('static', filename='css/caloria-logo.css') }}" rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -57,15 +59,21 @@
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             color: white;
         }
-        .brand-text {
-            font-weight: bold;
-            font-size: 1.5rem;
-            color: white;
-        }
         .navbar-brand {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 10px;
+            text-decoration: none;
+        }
+        
+        .navbar-brand:hover {
+            text-decoration: none;
+        }
+        
+        /* Admin panel specific logo adjustments */
+        .sidebar .dark-bg {
+            filter: brightness(1.3) saturate(1.2);
         }
     </style>
     
@@ -78,9 +86,8 @@
             <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
                 <div class="position-sticky pt-3">
                     <div class="text-center mb-4">
-                        <a class="navbar-brand" href="{{ url_for('admin_dashboard') }}">
-                            <i class="fas fa-utensils fa-2x"></i>
-                            <span class="brand-text">Caloria</span>
+                        <a class="navbar-brand caloria-brand" href="{{ url_for('admin_dashboard') }}">
+                            <span class="caloria-logo caloria-logo-md dark-bg">Caloria</span>
                         </a>
                         <hr class="text-white">
                     </div>

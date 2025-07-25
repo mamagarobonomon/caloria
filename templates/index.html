@@ -13,12 +13,17 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Caloria Logo Styles -->
+    <link href="{{ url_for('static', filename='css/caloria-logo.css') }}" rel="stylesheet">
     
     <style>
         :root {
-            --primary-color: #2563eb;
-            --primary-dark: #1d4ed8;
+            --primary-color: #3b82f6;
+            --primary-dark: #2563eb;
             --secondary-color: #10b981;
+            --accent-orange: #f97316;
+            --accent-purple: #8b5cf6;
+            --accent-yellow: #eab308;
             --text-dark: #1f2937;
             --text-light: #6b7280;
             --bg-light: #f8fafc;
@@ -51,6 +56,11 @@
             font-weight: 700;
             font-size: 1.5rem;
             color: var(--primary-color) !important;
+            text-decoration: none;
+        }
+        
+        .navbar-brand:hover {
+            text-decoration: none;
         }
 
         .nav-link {
@@ -223,7 +233,7 @@
         .feature-icon {
             width: 80px;
             height: 80px;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: linear-gradient(135deg, var(--secondary-color), var(--accent-orange));
             border-radius: 20px;
             display: flex;
             align-items: center;
@@ -231,6 +241,18 @@
             margin: 0 auto 1.5rem;
             color: white;
             font-size: 2rem;
+        }
+        
+        .feature-card:nth-child(1) .feature-icon {
+            background: linear-gradient(135deg, var(--secondary-color), var(--accent-yellow));
+        }
+        
+        .feature-card:nth-child(2) .feature-icon {
+            background: linear-gradient(135deg, var(--accent-yellow), var(--accent-orange));
+        }
+        
+        .feature-card:nth-child(3) .feature-icon {
+            background: linear-gradient(135deg, var(--accent-orange), var(--accent-purple));
         }
 
         .feature-title {
@@ -365,6 +387,22 @@
             color: white;
             font-size: 1.5rem;
         }
+        
+        .trust-badge:nth-child(1) .trust-icon {
+            background: linear-gradient(135deg, var(--secondary-color), var(--accent-yellow));
+        }
+        
+        .trust-badge:nth-child(2) .trust-icon {
+            background: linear-gradient(135deg, var(--accent-orange), var(--accent-purple));
+        }
+        
+        .trust-badge:nth-child(3) .trust-icon {
+            background: linear-gradient(135deg, var(--accent-purple), var(--primary-color));
+        }
+        
+        .trust-badge:nth-child(4) .trust-icon {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        }
 
         @media (max-width: 768px) {
             .hero-title {
@@ -420,9 +458,8 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="#home">
-                <i class="fas fa-leaf me-2"></i>
-                Caloria
+            <a class="navbar-brand caloria-brand" href="#home">
+                <span class="caloria-logo">Caloria</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -457,6 +494,9 @@
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-lg-6">
+                    <div class="text-center text-lg-start mb-4">
+                        <div class="caloria-logo hero-logo">Caloria</div>
+                    </div>
                     <div class="notification-badge">
                         <i class="fas fa-check-circle me-2"></i>
                         <span data-en="AI-Powered • HIPAA Compliant • WhatsApp Native" data-es="Con IA • Cumple HIPAA • Nativo de WhatsApp">Con IA • Cumple HIPAA • Nativo de WhatsApp</span>
@@ -755,8 +795,7 @@
             <div class="row">
                 <div class="col-lg-4 mb-4">
                     <h5 class="footer-title">
-                        <i class="fas fa-leaf me-2"></i>
-                        Caloria
+                        <span class="caloria-logo caloria-logo-md">Caloria</span>
                     </h5>
                     <p class="text-muted" data-en="AI-powered nutrition tracking made simple. Track calories, analyze food, and achieve your health goals through WhatsApp." data-es="Seguimiento nutricional con IA hecho simple. Rastrea calorías, analiza comida y alcanza tus objetivos de salud a través de WhatsApp.">
                         Seguimiento nutricional con IA hecho simple. Rastrea calorías, analiza comida y alcanza tus objetivos de salud a través de WhatsApp.

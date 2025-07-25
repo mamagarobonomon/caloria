@@ -389,45 +389,101 @@
 
 {% block extra_js %}
 <script>
-let refreshInterval;
-let countdownInterval;
+// Fix: Initialize variables properly and add error handling
+let refreshInterval = null;
+let countdownInterval = null;
 let countdown = 30;
+let isRefreshing = false;
 
 function refreshStatus() {
-    // Show spinning icon
-    document.getElementById('refresh-icon').classList.add('fa-spin');
+    // Prevent multiple simultaneous refreshes
+    if (isRefreshing) return;
+    isRefreshing = true;
     
-    // Reload the page
-    setTimeout(() => {
-        location.reload();
-    }, 500);
+    try {
+        // Show spinning icon
+        const refreshIcon = document.getElementById('refresh-icon');
+        if (refreshIcon) {
+            refreshIcon.classList.add('fa-spin');
+        }
+        
+        // Reload the page
+        setTimeout(() => {
+            location.reload();
+        }, 500);
+    } catch (error) {
+        console.error('Refresh failed:', error);
+        isRefreshing = false;
+    }
 }
 
 function startAutoRefresh() {
-    // Start countdown
-    countdownInterval = setInterval(() => {
-        countdown--;
-        document.getElementById('countdown').textContent = countdown;
-        
-        if (countdown <= 0) {
-            refreshStatus();
+    try {
+        // Clear existing intervals
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
         }
-    }, 1000);
+        
+        // Start countdown
+        countdownInterval = setInterval(() => {
+            countdown--;
+            const countdownElement = document.getElementById('countdown');
+            if (countdownElement) {
+                countdownElement.textContent = countdown;
+            }
+            
+            if (countdown <= 0) {
+                countdown = 30; // Reset countdown
+                refreshStatus();
+            }
+        }, 1000);
+    } catch (error) {
+        console.error('Auto-refresh setup failed:', error);
+    }
 }
 
 // Start auto-refresh when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    startAutoRefresh();
+    // Add error handling for auto-refresh
+    try {
+        startAutoRefresh();
+    } catch (error) {
+        console.error('Auto-refresh initialization failed:', error);
+    }
     
     // Add hover effects to metric cards
-    document.querySelectorAll('.metric-card').forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            this.style.borderLeftColor = '#007bff';
+    try {
+        document.querySelectorAll('.metric-card').forEach(card => {
+            if (card) {
+                card.addEventListener('mouseenter', function() {
+                    this.style.borderLeftColor = '#007bff';
+                });
+                card.addEventListener('mouseleave', function() {
+                    this.style.borderLeftColor = '#007bff';
+                });
+            }
         });
-        card.addEventListener('mouseleave', function() {
-            this.style.borderLeftColor = '#007bff';
-        });
-    });
+    } catch (error) {
+        console.error('Hover effects initialization failed:', error);
+    }
+});
+
+// Add page visibility handling to prevent background refreshes
+document.addEventListener('visibilitychange', function() {
+    try {
+        if (document.hidden) {
+            // Page is hidden, pause auto-refresh
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+        } else {
+            // Page is visible, resume auto-refresh
+            countdown = 30;
+            startAutoRefresh();
+        }
+    } catch (error) {
+        console.error('Visibility change handling failed:', error);
+    }
 });
 </script>
 {% endblock %} 

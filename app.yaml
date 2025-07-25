@@ -3,7 +3,7 @@ services:
 - name: web
   source_dir: /
   github:
-    repo: your-username/caloria
+    repo: mamagarobonomon/caloria
     branch: main
   run_command: gunicorn --worker-tmp-dir /dev/shm --config gunicorn.conf.py app:app
   environment_slug: python
@@ -13,11 +13,15 @@ services:
   - key: FLASK_ENV
     value: production
   - key: SECRET_KEY
-    value: your-production-secret-key-here
+    value: ${SECRET_KEY}
   - key: SPOONACULAR_API_KEY
     value: 3e0eac47470049d6845406463f223518
   - key: MANYCHAT_API_TOKEN
-    value: your-manychat-token
+    value: ${MANYCHAT_API_TOKEN}
+  - key: GOOGLE_APPLICATION_CREDENTIALS
+    value: ${GOOGLE_APPLICATION_CREDENTIALS}
+  - key: GOOGLE_CLOUD_KEY_JSON
+    value: ${GOOGLE_CLOUD_KEY_JSON}
   - key: DATABASE_URL
     value: ${db.DATABASE_URL}
   routes:
